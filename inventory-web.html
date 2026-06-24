@@ -175,97 +175,63 @@ async function ldCfg(){try{C=await api('/api/config');fillDL()}catch(e){}}
 function fillDL(){['ac','wh','sp','ct'].forEach(function(k){var dl=document.getElementById('dl-'+k);if(!dl)return;var key={ac:'accounts',wh:'warehouses',sp:'suppliers',ct:'customers'}[k];dl.innerHTML=(C[key]||[]).map(function(v){return'<option value="'+v+'">'}).join('')})}
 function getMat(c){return(C.materials&&C.materials[c])?C.materials[c]:c}
 
-// ====== 实时视频扫码（带闪光灯） ======
-var scanTarget='',scanStream=null,scanTorch=false,scanTrack=null,scanRunning=false;
+// ====== 扫码（拍照识别，快速精准） ======
+var scanTarget='',scanRunning=false;
 function scanCode(targetId) {
     if (scanRunning) return;
     scanTarget = targetId;
     scanRunning = true;
-    var el = document.createElement('div');
-    el.id = 'scan-vp';
-    el.className = 'scan-vp on';
-    el.innerHTML = '<div class="scan-close" onclick="stopScan()">&#10005;</div>' +
-        '<div class="scan-area"><video id="scan-video" autoplay playsinline style="width:100%;height:100%;object-fit:cover"></video><div class="scan-frame"></div></div>' +
-        '<div class="scan-hint">将条码对准框内</div>' +
-        '<div class="scan-torch" onclick="toggleScanTorch()">&#128161;</div>';
-    document.body.appendChild(el);
-    var video = document.getElementById('scan-video');
-    // 使用1280x720提高帧率和清晰度，微信内置浏览器对此分辨率兼容性更好
-    navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
-    }).then(function(stream) {
-        scanStream = stream;
-        video.srcObject = stream;
-        video.setAttribute('playsinline', true);
-        video.play();
-        var tracks = stream.getVideoTracks();
-        if (tracks.length > 0) {
-            scanTrack = tracks[0];
-            try { scanTrack.applyConstraints({ advanced: [{ zoom: 1.5 }] }).catch(function() {}); } catch(e) {}
-        }
-        var canvas = document.createElement('canvas');
-        var ctx = canvas.getContext('2d');
-        var frameCount = 0;
-        function tick() {
-            if (!scanRunning || !scanStream) return;
-            frameCount++;
-            // 每2帧处理一次，减少CPU消耗
-            if (frameCount % 2 !== 0) { requestAnimationFrame(tick); return; }
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                // 只取中间区域（扫描框位置），提高识别率
-                var vw = video.videoWidth, vh = video.videoHeight;
-                var sx = Math.floor(vw * 0.15), sy = Math.floor(vh * 0.15);
-                var sw = Math.floor(vw * 0.7), sh = Math.floor(vh * 0.4);
-                canvas.width = sw;
-                canvas.height = sh;
-                ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
-                // 图像锐化增强
-                var imageData = ctx.getImageData(0, 0, sw, sh);
+    // 创建隐藏的 file input，调用原生相机拍照
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment'; // 直接打开后置摄像头拍照
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.onchange = function() {
+        if (!input.files || !input.files[0]) { scanRunning = false; input.remove(); return; }
+        var file = input.files[0];
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var img = new Image();
+            img.onload = function() {
+                var canvas = document.createElement('canvas');
+                var ctx = canvas.getContext('2d');
+                // 缩放到合适大小，加快解码
+                var scale = Math.min(1, 800 / Math.max(img.width, img.height));
+                canvas.width = Math.floor(img.width * scale);
+                canvas.height = Math.floor(img.height * scale);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                // 锐化
                 var d = imageData.data;
                 for (var i = 0; i < d.length; i += 4) {
                     var avg = (d[i] + d[i+1] + d[i+2]) / 3;
-                    d[i] = d[i+1] = d[i+2] = avg > 128 ? Math.min(255, avg + 30) : Math.max(0, avg - 30);
+                    d[i] = d[i+1] = d[i+2] = avg > 128 ? Math.min(255, avg + 50) : Math.max(0, avg - 50);
                 }
-                ctx.putImageData(imageData, 0, 0);
                 var code = null;
-                try { code = jsQR(imageData.data, sw, sh, { inversionAttempts: 'attemptBoth' }); } catch(e) {}
+                try { code = jsQR(imageData.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' }); } catch(e) {}
                 if (code && code.data) {
                     var result = code.data;
-                    var input = document.getElementById(scanTarget);
-                    if (input) {
-                        input.value = result;
-                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                    var target = document.getElementById(scanTarget);
+                    if (target) {
+                        target.value = result;
+                        target.dispatchEvent(new Event('input', { bubbles: true }));
                     }
                     if (scanTarget.indexOf('qs-') === 0) lookupSn(result);
                     if (scanTarget === 'rs') renderRecs();
                     tm('已识别: ' + result);
-                    stopScan();
-                    return;
+                } else {
+                    tm('未识别到条码，请重试');
                 }
-            }
-            if (scanRunning) requestAnimationFrame(tick);
-        }
-        requestAnimationFrame(tick);
-    }).catch(function(err) {
-        tm('摄像头访问失败，请检查权限或使用HTTPS');
-        stopScan();
-    });
-}
-function toggleScanTorch() {
-    if (scanTrack && scanTrack.applyConstraints) {
-        scanTorch = !scanTorch;
-        scanTrack.applyConstraints({ advanced: [{ torch: scanTorch }] }).catch(function() {});
-        var btn = document.querySelector('.scan-torch');
-        if (btn) btn.textContent = scanTorch ? '🔦' : '💡';
-    }
-}
-function stopScan() {
-    scanRunning = false;
-    if (scanStream) { scanStream.getTracks().forEach(function(t) { t.stop(); }); scanStream = null; }
-    var el = document.getElementById('scan-vp');
-    if (el) el.remove();
-    scanTrack = null;
-    scanTorch = false;
+                scanRunning = false;
+                input.remove();
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+    input.click();
 }
 async function lookupSn(sn){
   try{
