@@ -133,7 +133,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f6fa;
 <div class="toast" id="toast"></div>
 
 <!-- 扫码库 -->
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 var T='',R='',U='',C={},rt='out',rct='ar',sd=[],od=[],id=[],td=[],qcart=[],rcData=null,whData=[],invData=null,stkFilter='all',qkDir='out';
 
@@ -176,48 +176,36 @@ async function ldCfg(){try{C=await api('/api/config');fillDL()}catch(e){}}
 function fillDL(){['ac','wh','sp','ct'].forEach(function(k){var dl=document.getElementById('dl-'+k);if(!dl)return;var key={ac:'accounts',wh:'warehouses',sp:'suppliers',ct:'customers'}[k];dl.innerHTML=(C[key]||[]).map(function(v){return'<option value="'+v+'">'}).join('')})}
 function getMat(c){return(C.materials&&C.materials[c])?C.materials[c]:c}
 
-// ====== 扫码（原生相机拍照+jsQR解码） ======
-var scanTarget='';
+// ====== 扫码（html5-qrcode 实时识别，支持条码和二维码） ======
+var scanTarget='',html5Scanner=null;
 function scanCode(targetId) {
     scanTarget = targetId;
-    var input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.capture = 'environment';
-    input.onchange = function() {
-        if (!input.files || !input.files[0]) return;
-        var img = new Image();
-        img.onload = function() {
-            var c = document.createElement('canvas');
-            var ctx = c.getContext('2d');
-            var max = 1200;
-            var s = Math.min(1, max / Math.max(img.width, img.height));
-            c.width = Math.floor(img.width * s);
-            c.height = Math.floor(img.height * s);
-            ctx.drawImage(img, 0, 0, c.width, c.height);
-            var d = ctx.getImageData(0, 0, c.width, c.height);
-            // 灰度+锐化
-            for (var i = 0; i < d.data.length; i += 4) {
-                var g = d.data[i] * 0.299 + d.data[i+1] * 0.587 + d.data[i+2] * 0.114;
-                g = g > 140 ? Math.min(255, g + 40) : Math.max(0, g - 40);
-                d.data[i] = d.data[i+1] = d.data[i+2] = g;
-            }
-            ctx.putImageData(d, 0, 0);
-            var code = jsQR(d.data, c.width, c.height, { inversionAttempts: 'attemptBoth' });
-            if (code && code.data) {
-                var r = code.data;
-                var t = document.getElementById(scanTarget);
-                if (t) { t.value = r; t.dispatchEvent(new Event('input', { bubbles: true })); }
-                if (scanTarget.indexOf('qs-') === 0) lookupSn(r);
-                if (scanTarget === 'rs') renderRecs();
-                tm('已识别: ' + r);
-            } else {
-                tm('未识别到条码，请重新拍照');
-            }
-        };
-        img.src = URL.createObjectURL(input.files[0]);
-    };
-    input.click();
+    var el = document.createElement('div');
+    el.id = 'scan-vp';
+    el.className = 'scan-vp on';
+    el.innerHTML = '<div class="scan-close" onclick="stopScan()">&#10005;</div>' +
+        '<div id="scan-reader" style="width:100%;height:100%"></div>' +
+        '<div class="scan-hint">将条码对准框内</div>';
+    document.body.appendChild(el);
+    html5Scanner = new Html5Qrcode('scan-reader');
+    html5Scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 280, height: 160 }, formatsToSupport: [0,1,2,3,4,5,6,7,8] },
+        function(code) {
+            var input = document.getElementById(scanTarget);
+            if (input) { input.value = code; input.dispatchEvent(new Event('input', { bubbles: true })); }
+            if (scanTarget.indexOf('qs-') === 0) lookupSn(code);
+            if (scanTarget === 'rs') renderRecs();
+            tm('已识别: ' + code);
+            stopScan();
+        },
+        function() {}
+    ).catch(function(err) { tm('摄像头启动失败: ' + err); stopScan(); });
+}
+function stopScan() {
+    if (html5Scanner) { try { html5Scanner.stop().catch(function(){}); } catch(e) {} html5Scanner = null; }
+    var el = document.getElementById('scan-vp');
+    if (el) el.remove();
 }
 async function lookupSn(sn){
   try{
