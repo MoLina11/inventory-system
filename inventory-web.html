@@ -132,9 +132,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f6fa;
 <div class="bar" id="bar"><div class="tb sel" onclick="go('home')"><span>🏠</span>首页</div><div class="tb" id="b-rec" onclick="go('reconciliation')"><span>📑</span>对账</div><div class="tb" onclick="go('records')"><span>📊</span>流水</div><div class="tb" onclick="go('stock')"><span>📋</span>库存</div><div class="tb" id="tb-set" style="display:none" onclick="go('settings')"><span>⚙️</span>设置</div><div class="tb" onclick="logout()"><span>🚪</span>退出</div></div>
 <div class="toast" id="toast"></div>
 
-<!-- 微信JS-SDK -->
-<script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
-<!-- 扫码库：Quagga2 兜底 -->
+<!-- 扫码库 -->
 <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
 <script>
 var T='',R='',U='',C={},rt='out',rct='ar',sd=[],od=[],id=[],td=[],qcart=[],rcData=null,whData=[],invData=null,stkFilter='all',qkDir='out';
@@ -178,46 +176,27 @@ async function ldCfg(){try{C=await api('/api/config');fillDL()}catch(e){}}
 function fillDL(){['ac','wh','sp','ct'].forEach(function(k){var dl=document.getElementById('dl-'+k);if(!dl)return;var key={ac:'accounts',wh:'warehouses',sp:'suppliers',ct:'customers'}[k];dl.innerHTML=(C[key]||[]).map(function(v){return'<option value="'+v+'">'}).join('')})}
 function getMat(c){return(C.materials&&C.materials[c])?C.materials[c]:c}
 
-// ====== 扫码（微信优先用原生扫码，其他用Quagga2） ======
+// ====== 扫码（Quagga2，带手电筒和点击对焦） ======
 var scanTarget='';
 function scanCode(targetId) {
     scanTarget = targetId;
-    // 微信环境：用微信原生扫码（最快最准）
-    if (typeof wx !== 'undefined' && wx.scanQRCode) {
-        wx.scanQRCode({
-            needResult: 1,
-            scanType: ['barCode', 'qrCode'],
-            success: function(res) {
-                var code = res.resultStr;
-                // 微信返回的可能带前缀，去掉
-                code = code.split(',').pop();
-                var input = document.getElementById(scanTarget);
-                if (input) {
-                    input.value = code;
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-                if (scanTarget.indexOf('qs-') === 0) lookupSn(code);
-                if (scanTarget === 'rs') renderRecs();
-                tm('已识别: ' + code);
-            },
-            fail: function() { tm('扫码取消'); }
-        });
-        return;
-    }
-    // 非微信环境：Quagga2 兜底
     var el = document.createElement('div');
     el.id = 'scan-vp';
     el.className = 'scan-vp on';
     el.innerHTML = '<div class="scan-close" onclick="stopScan()">&#10005;</div>' +
         '<div id="scan-area" style="position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden"><div class="scan-frame"></div></div>' +
-        '<div class="scan-hint">将条码对准框内</div>';
+        '<div class="scan-hint">将条码对准框内（点击画面手动对焦）</div>' +
+        '<div class="scan-torch" onclick="toggleScanTorch()">&#128161;</div>';
     document.body.appendChild(el);
+    // 点击画面手动对焦
+    var area = document.getElementById('scan-area');
+    var videoEl = null;
     Quagga.init({
         inputStream: {
             name: 'Live',
             type: 'LiveStream',
-            target: document.getElementById('scan-area'),
-            constraints: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 } }
+            target: area,
+            constraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
         },
         decoder: { readers: ['ean_reader', 'ean_8_reader', 'code_128_reader', 'code_39_reader', 'upc_reader', 'upc_e_reader'] },
         locator: { halfSample: true, patchSize: 'medium' },
@@ -226,25 +205,49 @@ function scanCode(targetId) {
     }, function(err) {
         if (err) { tm('摄像头启动失败: ' + err); stopScan(); return; }
         Quagga.start();
+        // 获取video元素用于手动对焦
+        setTimeout(function() {
+            videoEl = area.querySelector('video');
+            if (videoEl) {
+                area.onclick = function() {
+                    var track = Quagga.CameraAccess.getActiveTrack();
+                    if (track && track.applyConstraints) {
+                        track.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: 0.1 }] }).then(function() {
+                            setTimeout(function() {
+                                track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function() {});
+                            }, 500);
+                        }).catch(function() {});
+                    }
+                };
+            }
+        }, 1000);
     });
     Quagga.onDetected(function(result) {
         var code = result.codeResult.code;
         if (!code) return;
         var input = document.getElementById(scanTarget);
-        if (input) {
-            input.value = code;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
+        if (input) { input.value = code; input.dispatchEvent(new Event('input', { bubbles: true })); }
         if (scanTarget.indexOf('qs-') === 0) lookupSn(code);
         if (scanTarget === 'rs') renderRecs();
         tm('已识别: ' + code);
         stopScan();
     });
 }
+var scanTorch = false;
+function toggleScanTorch() {
+    var track = Quagga.CameraAccess.getActiveTrack();
+    if (track && track.applyConstraints) {
+        scanTorch = !scanTorch;
+        track.applyConstraints({ advanced: [{ torch: scanTorch }] }).catch(function() {});
+        var btn = document.querySelector('.scan-torch');
+        if (btn) btn.textContent = scanTorch ? '🔦' : '💡';
+    }
+}
 function stopScan() {
     try { Quagga.stop(); } catch(e) {}
     var el = document.getElementById('scan-vp');
     if (el) el.remove();
+    scanTorch = false;
 }
 async function lookupSn(sn){
   try{
