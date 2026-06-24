@@ -132,6 +132,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f6fa;
 <div class="bar" id="bar"><div class="tb sel" onclick="go('home')"><span>🏠</span>首页</div><div class="tb" id="b-rec" onclick="go('reconciliation')"><span>📑</span>对账</div><div class="tb" onclick="go('records')"><span>📊</span>流水</div><div class="tb" onclick="go('stock')"><span>📋</span>库存</div><div class="tb" id="tb-set" style="display:none" onclick="go('settings')"><span>⚙️</span>设置</div><div class="tb" onclick="logout()"><span>🚪</span>退出</div></div>
 <div class="toast" id="toast"></div>
 
+<!-- 微信JS-SDK -->
+<script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
+<!-- 扫码库：Quagga2 兜底 -->
 <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
 <script>
 var T='',R='',U='',C={},rt='out',rct='ar',sd=[],od=[],id=[],td=[],qcart=[],rcData=null,whData=[],invData=null,stkFilter='all',qkDir='out';
@@ -175,10 +178,33 @@ async function ldCfg(){try{C=await api('/api/config');fillDL()}catch(e){}}
 function fillDL(){['ac','wh','sp','ct'].forEach(function(k){var dl=document.getElementById('dl-'+k);if(!dl)return;var key={ac:'accounts',wh:'warehouses',sp:'suppliers',ct:'customers'}[k];dl.innerHTML=(C[key]||[]).map(function(v){return'<option value="'+v+'">'}).join('')})}
 function getMat(c){return(C.materials&&C.materials[c])?C.materials[c]:c}
 
-// ====== 扫码（Quagga2 实时视频流，专攻一维条码，快速精准） ======
+// ====== 扫码（微信优先用原生扫码，其他用Quagga2） ======
 var scanTarget='';
 function scanCode(targetId) {
     scanTarget = targetId;
+    // 微信环境：用微信原生扫码（最快最准）
+    if (typeof wx !== 'undefined' && wx.scanQRCode) {
+        wx.scanQRCode({
+            needResult: 1,
+            scanType: ['barCode', 'qrCode'],
+            success: function(res) {
+                var code = res.resultStr;
+                // 微信返回的可能带前缀，去掉
+                code = code.split(',').pop();
+                var input = document.getElementById(scanTarget);
+                if (input) {
+                    input.value = code;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                if (scanTarget.indexOf('qs-') === 0) lookupSn(code);
+                if (scanTarget === 'rs') renderRecs();
+                tm('已识别: ' + code);
+            },
+            fail: function() { tm('扫码取消'); }
+        });
+        return;
+    }
+    // 非微信环境：Quagga2 兜底
     var el = document.createElement('div');
     el.id = 'scan-vp';
     el.className = 'scan-vp on';
@@ -191,7 +217,7 @@ function scanCode(targetId) {
             name: 'Live',
             type: 'LiveStream',
             target: document.getElementById('scan-area'),
-            constraints: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, aspectRatio: { ideal: 16/9 } }
+            constraints: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 } }
         },
         decoder: { readers: ['ean_reader', 'ean_8_reader', 'code_128_reader', 'code_39_reader', 'upc_reader', 'upc_e_reader'] },
         locator: { halfSample: true, patchSize: 'medium' },
