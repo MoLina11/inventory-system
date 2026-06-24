@@ -178,17 +178,14 @@ async function ldCfg(){try{C=await api('/api/config');fillDL()}catch(e){}}
 function fillDL(){['ac','wh','sp','ct'].forEach(function(k){var dl=document.getElementById('dl-'+k);if(!dl)return;var key={ac:'accounts',wh:'warehouses',sp:'suppliers',ct:'customers'}[k];dl.innerHTML=(C[key]||[]).map(function(v){return'<option value="'+v+'">'}).join('')})}
 function getMat(c){return(C.materials&&C.materials[c])?C.materials[c]:c}
 
-// ====== 扫码终极方案：微信拍照 / 浏览器实时 ======
+// ====== 扫码：微信拍照 / 浏览器实时Quagga ======
 var scanTarget='',scanRunning=false;
 function scanCode(targetId) {
     scanTarget = targetId;
     var ua = navigator.userAgent.toLowerCase();
-    var isWx = ua.indexOf('micromessenger') !== -1;
-    if (isWx) {
-        // 微信：原生相机拍照+jsQR解码（最快最准）
+    if (ua.indexOf('micromessenger') !== -1) {
         scanByPhoto();
     } else {
-        // 普通浏览器：Quagga2实时视频流
         scanByLive();
     }
 }
@@ -249,7 +246,7 @@ function scanByPhoto() {
     };
     inp.click();
 }
-// 浏览器实时模式
+// 浏览器实时模式 - Quagga2 高帧率
 var scanStream=null;
 function scanByLive() {
     scanRunning = true;
@@ -261,16 +258,21 @@ function scanByLive() {
         '<div class="scan-hint">将条码对准框内</div>';
     document.body.appendChild(el);
     Quagga.init({
-        inputStream: { name: 'Live', type: 'LiveStream', target: document.getElementById('scan-area'), constraints: { facingMode: 'environment', width: { min: 640 }, height: { min: 480 } } },
-        decoder: { readers: ['ean_reader', 'ean_8_reader', 'code_128_reader', 'code_39_reader', 'upc_reader'] },
-        locator: { halfSample: true, patchSize: 'medium' },
-        locate: true, frequency: 10
+        inputStream: {
+            name: 'Live', type: 'LiveStream',
+            target: document.getElementById('scan-area'),
+            constraints: { facingMode: 'environment', width: { min: 320 }, height: { min: 240 } }
+        },
+        decoder: { readers: ['ean_reader', 'ean_8_reader', 'code_128_reader', 'code_39_reader', 'upc_reader', 'upc_e_reader'] },
+        locator: { halfSample: false },
+        locate: true,
+        frequency: 15
     }, function(err) {
-        if (err) { tm('摄像头失败，请用微信打开拍照扫码'); stopScan(); return; }
+        if (err) { tm('摄像头失败: ' + err); stopScan(); return; }
         Quagga.start();
     });
-    Quagga.onDetected(function(result) {
-        if (result && result.codeResult) handleScanResult(result.codeResult.code);
+    Quagga.onDetected(function(r) {
+        if (r && r.codeResult) handleScanResult(r.codeResult.code);
     });
 }
 function handleScanResult(code) {
