@@ -22,7 +22,7 @@ KDOCS_FILE_ID = os.environ.get('KDOCS_FILE_ID', '')
 USERS = {
     '1': {'password': '', 'role': 'admin', 'name': '管理员'},
     'finance': {'password': '123456', 'role': 'finance', 'name': '财务'},
-    'operator': {'password': '123456', 'role': 'operator', 'name': '登记员'},
+    'operator': {'password': '', 'role': 'operator', 'name': '登记员'},
 }
 
 ROLE_PERMS = {
@@ -369,6 +369,24 @@ def api_outbound_batch():
             errors.append(f'{name}: 库存不足(当前{stock_item["stock"]})')
             continue
         
+        # 验证SN序列号（如果填写了SN）
+        if sn:
+            inbound_sns = set()
+            for r in d['inbound']:
+                if r.get('code') == code:
+                    for sf in ['sn1', 'sn2', 'sn3']:
+                        v = r.get(sf, '')
+                        if v: inbound_sns.add(v)
+            outbound_sns = set()
+            for r in d['outbound']:
+                if r.get('snSerial'): outbound_sns.add(r.get('snSerial'))
+            if sn not in inbound_sns:
+                errors.append(f'{name}: SN "{sn}" 不在入库记录中，无法出库')
+                continue
+            if sn in outbound_sns:
+                errors.append(f'{name}: SN "{sn}" 已被出库，不能重复出库')
+                continue
+        
         rec = {
             'no': batch_no,
             'date': date,
@@ -676,10 +694,26 @@ def api_add_user():
 def api_delete_user(username):
     s = require_admin()
     if not s: return jsonify({'error': '需要管理员权限'}), 403
-    if username == 'admin':
+    if username == 'admin' or username == '1':
         return jsonify({'success': False, 'error': '不能删除管理员'})
     if username in USERS:
         del USERS[username]
+    return jsonify({'success': True})
+
+@app.route('/api/users/<username>', methods=['PUT'])
+def api_edit_user(username):
+    s = require_admin()
+    if not s: return jsonify({'error': '需要管理员权限'}), 403
+    if username not in USERS:
+        return jsonify({'success': False, 'error': '用户不存在'})
+    data = request.json
+    role = data.get('role', USERS[username]['role'])
+    if role not in ('admin', 'finance', 'operator'):
+        return jsonify({'success': False, 'error': '无效角色'})
+    USERS[username]['role'] = role
+    USERS[username]['name'] = data.get('name', USERS[username]['name'])
+    if data.get('password'):
+        USERS[username]['password'] = data['password']
     return jsonify({'success': True})
 
 # ============ 静态文件 ============
@@ -1047,7 +1081,7 @@ def api_outbound_modify(no):
     for r in d['outbound']:
         if r.get('no') == no:
             for k, v in data.items():
-                if k in r: r[k] = v
+                r[k] = v
     save_data(d)
     return jsonify({'success': True})
 
@@ -1078,7 +1112,7 @@ def api_inbound_modify(no):
     for r in d['inbound']:
         if r.get('no') == no:
             for k, v in data.items():
-                if k in r: r[k] = v
+                r[k] = v
     save_data(d)
     return jsonify({'success': True})
 
