@@ -191,7 +191,7 @@ function scanCode(targetId) {
             name: 'Live',
             type: 'LiveStream',
             target: document.getElementById('scan-area'),
-            constraints: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, aspectRatio: { ideal: 16/9 } }
+            constraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, aspectRatio: { ideal: 16/9 } }
         },
         decoder: { readers: ['ean_reader', 'ean_8_reader', 'code_128_reader', 'code_39_reader', 'upc_reader', 'upc_e_reader'] },
         locator: { halfSample: true, patchSize: 'medium' },
@@ -200,11 +200,13 @@ function scanCode(targetId) {
     }, function(err) {
         if (err) { tm('摄像头启动失败: ' + err); stopScan(); return; }
         Quagga.start();
-        // 2倍变焦
-        var track = Quagga.CameraAccess.getActiveTrack();
-        if (track && track.applyConstraints) {
-            track.applyConstraints({ advanced: [{ zoom: 2.0 }] }).catch(function() {});
-        }
+        // 1.5倍变焦
+        setTimeout(function() {
+            var track = Quagga.CameraAccess.getActiveTrack();
+            if (track && track.applyConstraints) {
+                track.applyConstraints({ advanced: [{ zoom: 1.5 }] }).catch(function() {});
+            }
+        }, 500);
     });
     Quagga.onDetected(function(result) {
         var code = result.codeResult.code;
