@@ -133,7 +133,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f6fa;
 <div class="toast" id="toast"></div>
 
 <!-- 扫码库 -->
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<!-- 扫码库 -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script>
 var T='',R='',U='',C={},rt='out',rct='ar',sd=[],od=[],id=[],td=[],qcart=[],rcData=null,whData=[],invData=null,stkFilter='all',qkDir='out';
 
@@ -176,34 +177,57 @@ async function ldCfg(){try{C=await api('/api/config');fillDL()}catch(e){}}
 function fillDL(){['ac','wh','sp','ct'].forEach(function(k){var dl=document.getElementById('dl-'+k);if(!dl)return;var key={ac:'accounts',wh:'warehouses',sp:'suppliers',ct:'customers'}[k];dl.innerHTML=(C[key]||[]).map(function(v){return'<option value="'+v+'">'}).join('')})}
 function getMat(c){return(C.materials&&C.materials[c])?C.materials[c]:c}
 
-// ====== 扫码（html5-qrcode 实时识别，支持条码和二维码） ======
-var scanTarget='',html5Scanner=null;
+// ====== 扫码（原生相机+jsQR，微信/浏览器通用） ======
+var scanTarget='',scanStream=null;
 function scanCode(targetId) {
     scanTarget = targetId;
     var el = document.createElement('div');
     el.id = 'scan-vp';
     el.className = 'scan-vp on';
     el.innerHTML = '<div class="scan-close" onclick="stopScan()">&#10005;</div>' +
-        '<div id="scan-reader" style="width:100%;height:100%"></div>' +
+        '<div class="scan-area"><video id="scan-video" autoplay playsinline style="width:100%;height:100%;object-fit:cover"></video><div class="scan-frame"></div></div>' +
         '<div class="scan-hint">将条码对准框内</div>';
     document.body.appendChild(el);
-    html5Scanner = new Html5Qrcode('scan-reader');
-    html5Scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 280, height: 160 }, formatsToSupport: [0,1,2,3,4,5,6,7,8] },
-        function(code) {
-            var input = document.getElementById(scanTarget);
-            if (input) { input.value = code; input.dispatchEvent(new Event('input', { bubbles: true })); }
-            if (scanTarget.indexOf('qs-') === 0) lookupSn(code);
-            if (scanTarget === 'rs') renderRecs();
-            tm('已识别: ' + code);
-            stopScan();
-        },
-        function() {}
-    ).catch(function(err) { tm('摄像头启动失败: ' + err); stopScan(); });
+    var video = document.getElementById('scan-video');
+    var ua = navigator.userAgent.toLowerCase();
+    var isWx = ua.indexOf('micromessenger') !== -1;
+    // 微信里用低分辨率提高帧率
+    var w = isWx ? 640 : 1280, h = isWx ? 480 : 720;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: w }, height: { ideal: h } } })
+    .then(function(stream) {
+        scanStream = stream;
+        video.srcObject = stream;
+        video.setAttribute('playsinline', true);
+        video.play();
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        var fc = 0;
+        (function tick() {
+            if (!scanStream) return;
+            fc++;
+            if (fc % 3 !== 0) { requestAnimationFrame(tick); return; }
+            if (video.readyState >= 2) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                var d = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                var code = jsQR(d.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
+                if (code && code.data) {
+                    var r = code.data;
+                    var inp = document.getElementById(scanTarget);
+                    if (inp) { inp.value = r; inp.dispatchEvent(new Event('input', { bubbles: true })); }
+                    if (scanTarget.indexOf('qs-') === 0) lookupSn(r);
+                    if (scanTarget === 'rs') renderRecs();
+                    stopScan();
+                    return;
+                }
+            }
+            requestAnimationFrame(tick);
+        })();
+    }).catch(function() { stopScan(); });
 }
 function stopScan() {
-    if (html5Scanner) { try { html5Scanner.stop().catch(function(){}); } catch(e) {} html5Scanner = null; }
+    if (scanStream) { scanStream.getTracks().forEach(function(t) { t.stop(); }); scanStream = null; }
     var el = document.getElementById('scan-vp');
     if (el) el.remove();
 }
