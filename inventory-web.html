@@ -135,6 +135,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f6fa;
 <!-- 扫码库 -->
 <!-- 扫码库 -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
 <script>
 var T='',R='',U='',C={},rt='out',rct='ar',sd=[],od=[],id=[],td=[],qcart=[],rcData=null,whData=[],invData=null,stkFilter='all',qkDir='out';
 
@@ -177,56 +178,97 @@ async function ldCfg(){try{C=await api('/api/config');fillDL()}catch(e){}}
 function fillDL(){['ac','wh','sp','ct'].forEach(function(k){var dl=document.getElementById('dl-'+k);if(!dl)return;var key={ac:'accounts',wh:'warehouses',sp:'suppliers',ct:'customers'}[k];dl.innerHTML=(C[key]||[]).map(function(v){return'<option value="'+v+'">'}).join('')})}
 function getMat(c){return(C.materials&&C.materials[c])?C.materials[c]:c}
 
-// ====== 扫码（原生相机+jsQR，微信/浏览器通用） ======
-var scanTarget='',scanStream=null;
+// ====== 扫码终极方案：微信拍照 / 浏览器实时 ======
+var scanTarget='',scanRunning=false;
 function scanCode(targetId) {
     scanTarget = targetId;
+    var ua = navigator.userAgent.toLowerCase();
+    var isWx = ua.indexOf('micromessenger') !== -1;
+    if (isWx) {
+        // 微信：原生相机拍照+jsQR解码（最快最准）
+        scanByPhoto();
+    } else {
+        // 普通浏览器：Quagga2实时视频流
+        scanByLive();
+    }
+}
+// 微信拍照模式
+function scanByPhoto() {
+    var inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*';
+    inp.capture = 'environment';
+    inp.onchange = function() {
+        if (!inp.files || !inp.files[0]) return;
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var img = new Image();
+            img.onload = function() {
+                var c = document.createElement('canvas');
+                var ctx = c.getContext('2d');
+                var s = Math.min(1, 1200 / Math.max(img.width, img.height));
+                c.width = Math.floor(img.width * s);
+                c.height = Math.floor(img.height * s);
+                ctx.drawImage(img, 0, 0, c.width, c.height);
+                var d = ctx.getImageData(0, 0, c.width, c.height);
+                for (var i = 0; i < d.data.length; i += 4) {
+                    var g = d.data[i] * 0.299 + d.data[i+1] * 0.587 + d.data[i+2] * 0.114;
+                    g = g > 128 ? Math.min(255, g + 60) : Math.max(0, g - 60);
+                    d.data[i] = d.data[i+1] = d.data[i+2] = g;
+                }
+                ctx.putImageData(d, 0, 0);
+                var code = jsQR(d.data, c.width, c.height, { inversionAttempts: 'attemptBoth' });
+                if (code && code.data) {
+                    handleScanResult(code.data);
+                } else {
+                    // jsQR没识别到，用Quagga再试一次
+                    Quagga.decodeSingle({ src: e.target.result, numOfWorkers: 0, decoder: { readers: ['ean_reader', 'ean_8_reader', 'code_128_reader', 'code_39_reader'] } }, function(r) {
+                        if (r && r.codeResult) handleScanResult(r.codeResult.code);
+                        else tm('未识别到条码，请重新拍照');
+                    });
+                }
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(inp.files[0]);
+    };
+    inp.click();
+}
+// 浏览器实时模式
+var scanStream=null;
+function scanByLive() {
+    scanRunning = true;
     var el = document.createElement('div');
     el.id = 'scan-vp';
     el.className = 'scan-vp on';
     el.innerHTML = '<div class="scan-close" onclick="stopScan()">&#10005;</div>' +
-        '<div class="scan-area"><video id="scan-video" autoplay playsinline style="width:100%;height:100%;object-fit:cover"></video><div class="scan-frame"></div></div>' +
+        '<div id="scan-area" style="position:absolute;top:0;left:0;width:100%;height:100%"></div>' +
         '<div class="scan-hint">将条码对准框内</div>';
     document.body.appendChild(el);
-    var video = document.getElementById('scan-video');
-    var ua = navigator.userAgent.toLowerCase();
-    var isWx = ua.indexOf('micromessenger') !== -1;
-    // 微信里用低分辨率提高帧率
-    var w = isWx ? 640 : 1280, h = isWx ? 480 : 720;
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: w }, height: { ideal: h } } })
-    .then(function(stream) {
-        scanStream = stream;
-        video.srcObject = stream;
-        video.setAttribute('playsinline', true);
-        video.play();
-        var canvas = document.createElement('canvas');
-        var ctx = canvas.getContext('2d');
-        var fc = 0;
-        (function tick() {
-            if (!scanStream) return;
-            fc++;
-            if (fc % 3 !== 0) { requestAnimationFrame(tick); return; }
-            if (video.readyState >= 2) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                var d = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                var code = jsQR(d.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
-                if (code && code.data) {
-                    var r = code.data;
-                    var inp = document.getElementById(scanTarget);
-                    if (inp) { inp.value = r; inp.dispatchEvent(new Event('input', { bubbles: true })); }
-                    if (scanTarget.indexOf('qs-') === 0) lookupSn(r);
-                    if (scanTarget === 'rs') renderRecs();
-                    stopScan();
-                    return;
-                }
-            }
-            requestAnimationFrame(tick);
-        })();
-    }).catch(function() { stopScan(); });
+    Quagga.init({
+        inputStream: { name: 'Live', type: 'LiveStream', target: document.getElementById('scan-area'), constraints: { facingMode: 'environment', width: { min: 640 }, height: { min: 480 } } },
+        decoder: { readers: ['ean_reader', 'ean_8_reader', 'code_128_reader', 'code_39_reader', 'upc_reader'] },
+        locator: { halfSample: true, patchSize: 'medium' },
+        locate: true, frequency: 10
+    }, function(err) {
+        if (err) { tm('摄像头失败，请用微信打开拍照扫码'); stopScan(); return; }
+        Quagga.start();
+    });
+    Quagga.onDetected(function(result) {
+        if (result && result.codeResult) handleScanResult(result.codeResult.code);
+    });
+}
+function handleScanResult(code) {
+    var inp = document.getElementById(scanTarget);
+    if (inp) { inp.value = code; inp.dispatchEvent(new Event('input', { bubbles: true })); }
+    if (scanTarget.indexOf('qs-') === 0) lookupSn(code);
+    if (scanTarget === 'rs') renderRecs();
+    tm('已识别: ' + code);
+    stopScan();
 }
 function stopScan() {
+    scanRunning = false;
+    try { Quagga.stop(); } catch(e) {}
     if (scanStream) { scanStream.getTracks().forEach(function(t) { t.stop(); }); scanStream = null; }
     var el = document.getElementById('scan-vp');
     if (el) el.remove();
