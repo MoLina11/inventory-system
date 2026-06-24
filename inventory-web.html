@@ -1,0 +1,319 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>出入库管理系统</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f6fa;color:#333;font-size:14px;max-width:480px;margin:0 auto;min-height:100vh}
+.pg{display:none;padding-bottom:60px}.pg.on{display:block}
+.hd{background:linear-gradient(135deg,#1a73e8,#1557b0);padding:14px 16px;color:#fff;font-size:17px;font-weight:600}
+.hd .u{font-size:11px;opacity:0.8;float:right}
+.cd{background:#fff;border-radius:10px;padding:14px;margin:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
+.ct{font-size:15px;font-weight:600;margin-bottom:10px;display:flex;justify-content:space-between}
+.cs{font-size:12px;color:#1a73e8;cursor:pointer;font-weight:400}
+.fg{margin-bottom:12px}.fg label{display:block;font-size:12px;color:#666;margin-bottom:4px}
+.fg .rq{color:#e74c3c}
+.fi{width:100%;height:40px;background:#f8f9fb;border-radius:8px;padding:0 10px;font-size:14px;border:2px solid transparent;outline:none;box-sizing:border-box}
+.fi:focus{border-color:#1a73e8;background:#fff}
+.sr{display:flex;gap:6px}.sr .fi{flex:1}
+.scb{width:40px;height:40px;background:#e3f2fd;border-radius:8px;border:none;font-size:20px;cursor:pointer;flex-shrink:0}
+.btn{display:block;width:100%;height:44px;border-radius:22px;font-size:15px;font-weight:600;border:none;cursor:pointer;margin:8px 0;text-align:center;line-height:44px}
+.btn-p{background:linear-gradient(135deg,#1a73e8,#1557b0);color:#fff}
+.btn-o{background:#fff;color:#1a73e8;border:2px solid #1a73e8;line-height:40px}
+.btn-s{display:inline-block;width:auto;padding:0 16px;height:32px;line-height:32px;font-size:12px;border-radius:16px;margin:4px}
+.tag{display:inline-block;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:500}
+.tag-r{background:#ffebee;color:#c62828}.tag-o{background:#fff3e0;color:#ef6c00}.tag-g{background:#e8f5e9;color:#2e7d32}.tag-b{background:#e3f2fd;color:#1565c0}
+.row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f5f5f5;font-size:13px}
+.row .l{flex:1;font-weight:500}.row .c{font-size:11px;color:#999}
+.bar{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;background:#fff;display:flex;border-top:1px solid #eee;z-index:100}
+.bar .tb{flex:1;text-align:center;padding:7px 0;font-size:10px;color:#999;cursor:pointer}
+.bar .tb.sel{color:#1a73e8}.bar .tb span{font-size:18px;display:block}
+.tabs{display:flex;background:#fff;border-radius:10px;margin:10px;overflow:hidden}
+.tabs .t{flex:1;text-align:center;padding:10px;cursor:pointer;font-size:13px;color:#666}
+.tabs .t.sel{background:#1a73e8;color:#fff;font-weight:500}
+.filters{display:flex;padding:0 10px 8px;gap:6px;overflow-x:auto;white-space:nowrap}
+.filters .f{flex-shrink:0;padding:6px 14px;border-radius:14px;font-size:12px;background:#f0f2f5;color:#666;cursor:pointer}
+.filters .f.sel{background:#1a73e8;color:#fff}
+.stats{display:flex;gap:8px;padding:10px}.stats .s{flex:1;background:#fff;border-radius:10px;padding:12px;text-align:center;cursor:pointer}
+.s .n{font-size:24px;font-weight:700;color:#1a73e8}.s .n.w{color:#ef6c00}.s .l{font-size:10px;color:#999;margin-top:2px}
+.acts{display:flex;justify-content:space-around;padding:6px 0;flex-wrap:wrap}
+.act{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:4px}
+.act .ic{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px}
+.ic.g{background:#e8f5e9}.ic.b{background:#e3f2fd}.ic.o{background:#fff3e0}.ic.p{background:#f3e5f5}.ic.r{background:#fce4ec}.ic.v{background:#ede7f6}.ic.t{background:#e0f2f1}
+.act .tx{font-size:10px;color:#666}
+.search{display:flex;align-items:center;background:#f0f2f5;border-radius:20px;padding:0 12px;height:36px;margin:10px}
+.search input{flex:1;font-size:13px;background:transparent;border:none;outline:none}
+.toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;z-index:9999;display:none;text-align:center}
+.empty{text-align:center;padding:40px;color:#bbb}
+.hint{background:#fff8e1;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:12px}
+.ft{display:flex;flex-wrap:wrap;gap:6px;padding-top:6px;margin-top:6px;border-top:1px solid #f5f5f5;font-size:11px;color:#888}
+.fg2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center}
+.fi2{padding:10px 6px;background:#f8f9fb;border-radius:6px}.fi2 .l2{font-size:10px;color:#999}.fi2 .v2{font-size:16px;font-weight:700;color:#1a73e8}
+.fi2 .v2.gr{color:#2e7d32}.fi2 .v2.rd{color:#e74c3c}
+.ar2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.ac{background:#f8f9fb;border-radius:8px;padding:12px;text-align:center}.ac .al{font-size:10px;color:#999}.ac .av{font-size:20px;font-weight:700;color:#1a73e8}.ac .av.or{color:#ef6c00}
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:998;display:none;align-items:center;justify-content:center;max-width:480px;margin:0 auto}
+.modal.on{display:flex}.mc{background:#fff;border-radius:14px;padding:18px;width:90%;max-height:75vh;overflow-y:auto}
+.mt{font-size:15px;font-weight:600;margin-bottom:10px;display:flex;justify-content:space-between}.mx{font-size:22px;cursor:pointer;color:#999;line-height:1}
+.sn-table{width:100%;border-collapse:collapse;font-size:11px}
+.sn-table th,.sn-table td{padding:6px 4px;text-align:left;border-bottom:1px solid #f0f0f0}.sn-table th{background:#f8f9fb;color:#666;font-weight:500}
+.st-sec{margin-bottom:14px}.st-sec h4{font-size:13px;color:#555;margin-bottom:6px}
+.st-row{display:flex;gap:6px;margin-bottom:6px;align-items:center}
+.st-row input{flex:1;height:34px;background:#f8f9fb;border-radius:6px;padding:0 8px;font-size:12px;border:1px solid #eee;outline:none}
+.st-row button{height:34px;padding:0 12px;border-radius:6px;border:none;font-size:12px;cursor:pointer}
+.st-item{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:#f8f9fb;border-radius:6px;margin-bottom:3px;font-size:12px}
+.st-item .del{color:#e74c3c;cursor:pointer;font-size:15px}
+.cart-item{background:#f8f9fb;border-radius:8px;padding:10px;margin-bottom:6px;position:relative}
+.cart-item .cdel{position:absolute;top:6px;right:8px;color:#e74c3c;cursor:pointer;font-size:16px}
+.cart-sum{text-align:right;padding:10px 0;font-size:14px;border-top:2px solid #eee;margin-top:6px}
+.dir-switch{display:flex;background:#f0f2f5;border-radius:22px;padding:3px;margin-bottom:14px}
+.dir-switch .ds{flex:1;text-align:center;padding:10px;border-radius:20px;font-size:13px;cursor:pointer;font-weight:500;color:#666}
+.dir-switch .ds.sel{background:#1a73e8;color:#fff}
+.login-box{max-width:340px;margin:50px auto 0;padding:0 20px}
+.login-box h1{text-align:center;font-size:22px;margin-bottom:28px;color:#1a73e8}
+.login-box .hint{text-align:center;font-size:10px;color:#bbb;margin-top:14px;line-height:1.8}
+.date-range{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.date-range input{flex:1;height:36px;background:#f8f9fb;border-radius:8px;padding:0 8px;font-size:13px;border:1px solid #eee;outline:none}
+.rec-actions{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.rec-actions button{font-size:10px;padding:3px 8px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer}
+.rec-actions button.del{color:#e74c3c;border-color:#e74c3c}
+.inv-status{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:8px}
+.inv-ok{background:#e8f5e9;color:#2e7d32}.inv-no{background:#fff3e0;color:#ef6c00}
+.paid-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:8px}
+.paid-yes{background:#e8f5e9;color:#2e7d32}.paid-no{background:#ffebee;color:#c62828}
+.scan-vp{position:fixed;top:0;left:0;right:0;bottom:0;z-index:1001;background:#000;max-width:480px;margin:0 auto;display:none}
+.scan-vp.on{display:block}
+.scan-close{position:absolute;top:14px;right:14px;z-index:10;color:#fff;font-size:28px;cursor:pointer}
+.scan-hint{position:absolute;bottom:80px;left:0;right:0;text-align:center;color:#fff;font-size:14px;z-index:10}
+.scan-torch{position:absolute;bottom:120px;left:50%;transform:translateX(-50%);width:48px;height:48px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;z-index:10;cursor:pointer}
+.scan-area{position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden}
+.scan-frame{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:260px;height:160px;border:3px solid #00ff00;border-radius:8px;box-shadow:0 0 0 1000px rgba(0,0,0,0.5)}
+@media(min-width:481px){body{border-left:1px solid #eee;border-right:1px solid #eee}}
+</style></head><body>
+
+<div class="pg on" id="login"><div class="login-box"><h1>📦 出入库管理系统</h1><div class="fg"><label>用户名</label><div class="sr"><input class="fi" id="lu" placeholder="输入用户名" list="dl-users" oninput="autoFillPwd()"><datalist id="dl-users"></datalist></div></div><div class="fg" id="pwd-grp"><label>密码</label><input class="fi" id="lp" type="password" placeholder="输入密码"></div><button class="btn btn-p" onclick="doLogin()">登 录</button></div></div>
+
+<div class="pg" id="home"><div class="hd">📦 出入库管理 <span class="u" id="hu"></span></div><div class="stats"><div class="s" onclick="go('stock')"><div class="n" id="h1">0</div><div class="l">商品种类</div></div><div class="s" onclick="go('stock')"><div class="n w" id="h2">0</div><div class="l">库存预警</div></div><div class="s"><div class="n" id="h3">0</div><div class="l">入库记录</div></div><div class="s"><div class="n" id="h4">0</div><div class="l">出库记录</div></div></div><div class="cd"><div class="ct">快捷操作</div><div class="acts"><div class="act" onclick="go('quick')"><div class="ic v">⚡</div><div class="tx">快速登记</div></div><div class="act" onclick="go('stock')"><div class="ic o">📋</div><div class="tx">库存查询</div></div><div class="act" onclick="go('records')"><div class="ic p">📊</div><div class="tx">出入流水</div></div><div class="act" id="a-fin" onclick="go('finance')"><div class="ic r">💰</div><div class="tx">资金汇总</div></div><div class="act" id="a-rec" onclick="go('reconciliation')"><div class="ic t">📑</div><div class="tx">对账管理</div></div></div></div><div class="cd" id="alert-cd" style="display:none"><div class="ct"><span>⚠️ 库存预警</span><span class="cs" onclick="go('stock')">全部 ›</span></div><div id="alert-ls"></div></div><div class="cd"><div class="ct"><span>📤 最近出库</span><span class="cs" onclick="go('records')">全部 ›</span></div><div id="recent-ls"></div></div></div>
+
+<!-- 快速登记（入库/出库/调货 三合一） -->
+<div class="pg" id="quick"><div class="hd">⚡ 快速登记</div><div class="cd"><div class="dir-switch"><div class="ds sel" onclick="qDir('out')">📤 出库</div><div class="ds" onclick="qDir('in')">📥 入库</div><div class="ds" onclick="qDir('tf')">🔄 调货</div></div>
+  <div class="fg"><label>单号</label><div class="sr"><input class="fi" id="qk-no" readonly><button class="scb" onclick="scanCode('qk-no')">📷</button></div></div>
+  <div class="fg"><label><span class="rq">*</span>日期</label><input class="fi" type="datetime-local" id="qk-date"></div>
+  <!-- 入库字段 -->
+  <div id="qk-in-fields"><div class="fg"><label>供应商</label><div class="sr"><input class="fi" id="qk-sup" placeholder="选择或输入" list="dl-sp"><datalist id="dl-sp"></datalist></div></div><div class="fg"><label>采购账户</label><div class="sr"><input class="fi" id="qk-ac" placeholder="选择或输入" list="dl-ac"><datalist id="dl-ac"></datalist></div></div></div>
+  <!-- 出库字段 -->
+  <div id="qk-out-fields" style="display:none"><div class="fg"><label>客户</label><div class="sr"><input class="fi" id="qk-cust" placeholder="选择或输入" list="dl-ct"><datalist id="dl-ct"></datalist></div></div><div class="fg"><label>收入账户</label><div class="sr"><input class="fi" id="qk-ac-out" placeholder="选择或输入" list="dl-ac"></div></div><div class="fg"><label>收款状态</label><select class="fi" id="qk-paid"><option value="0">未收款</option><option value="1">已收款</option></select></div></div>
+  <!-- 调货字段 -->
+  <div id="qk-tf-fields" style="display:none"><div class="fg"><label><span class="rq">*</span>经手仓位</label><div class="sr"><input class="fi" id="qk-tf-wh" placeholder="选择或输入" list="dl-wh"><datalist id="dl-wh"></datalist></div></div><div class="fg"><label>供应商</label><div class="sr"><input class="fi" id="qk-tf-sup" placeholder="选择或输入" list="dl-sp"></div></div><div class="fg"><label>客户</label><div class="sr"><input class="fi" id="qk-tf-cust" placeholder="选择或输入" list="dl-ct"></div></div></div>
+  <!-- 公共字段 -->
+  <div class="fg" id="qk-wh-grp"><label>仓位</label><div class="sr"><input class="fi" id="qk-wh" placeholder="选择或输入" list="dl-wh"></div></div>
+  <div class="ct" style="margin-top:16px">📋 商品清单 <span class="cs" onclick="addQCart()">+ 添加</span></div>
+  <div id="qcart-ls"></div><div class="cart-sum" id="qcart-sum">合计: ¥0.00 (0件)</div>
+  <div class="fg"><label>备注</label><input class="fi" id="qk-rm" placeholder="选填"></div>
+  <button class="btn btn-p" onclick="doQuick()">确认登记</button>
+  <button class="btn btn-o" onclick="rstQuick()">清空重置</button>
+</div></div>
+
+<!-- 库存 -->
+<div class="pg" id="stock"><div class="hd">📋 库存查询</div><div class="filters"><div class="f sel" onclick="stockFilter('all')">全部</div><div class="f" onclick="stockFilter('warehouse')">仓位库存</div><div class="f" id="f-inv" onclick="stockFilter('invoice')">发票库存</div></div><div class="search"><span>🔍</span><input id="ss" placeholder="搜索编码或名称" oninput="renderStock()"></div><div id="stock-ls" style="padding:0 10px"></div></div>
+<div class="modal" id="sn-modal"><div class="mc"><div class="mt"><span id="sn-tt"></span><span class="mx" onclick="closeSn()">✕</span></div><div id="sn-ct"></div></div></div>
+
+<!-- 流水 -->
+<div class="pg" id="records"><div class="hd">📊 出入库流水</div><div class="tabs"><div class="t sel" id="rt-o" onclick="rtab('out')">出库</div><div class="t" id="rt-i" onclick="rtab('in')">入库</div><div class="t" id="rt-tf" onclick="rtab('tf')">调货</div></div><div class="search"><span>🔍</span><input id="rs" placeholder="搜索单号/物料/SN" oninput="renderRecs()"></div><div id="rec-ls" style="padding:0 10px"></div></div>
+<div class="modal" id="ret-modal"><div class="mc"><div class="mt"><span>操作</span><span class="mx" onclick="closeRet()">✕</span></div><div id="ret-ct"></div></div></div>
+<div class="modal" id="edit-modal"><div class="mc"><div class="mt"><span>编辑</span><span class="mx" onclick="closeEdit()">✕</span></div><div id="edit-ct"></div></div></div>
+
+<!-- 资金汇总 -->
+<div class="pg" id="finance"><div class="hd">💰 资金汇总</div><div class="cd"><div class="ct">📈 销售收入</div><div class="date-range"><input type="date" id="fs-date" onchange="ldFin()"><span>至</span><input type="date" id="fe-date" onchange="ldFin()"><button class="btn-s btn-p" onclick="ldFin()">查询</button></div><div class="fg2"><div class="fi2"><div class="l2">今日</div><div class="v2" id="fd-s">0</div></div><div class="fi2"><div class="l2">成本</div><div class="v2 rd" id="fd-c">0</div></div><div class="fi2"><div class="l2">利润</div><div class="v2 gr" id="fd-p">0</div></div></div><div class="fg2" style="margin-top:6px"><div class="fi2"><div class="l2">本月</div><div class="v2" id="fm-s">0</div></div><div class="fi2"><div class="l2">成本</div><div class="v2 rd" id="fm-c">0</div></div><div class="fi2"><div class="l2">利润</div><div class="v2 gr" id="fm-p">0</div></div></div><div class="fg2" style="margin-top:6px"><div class="fi2"><div class="l2">年度</div><div class="v2" id="fy-s">0</div></div><div class="fi2"><div class="l2">成本</div><div class="v2 rd" id="fy-c">0</div></div><div class="fi2"><div class="l2">利润</div><div class="v2 gr" id="fy-p">0</div></div></div><div class="fg2" style="margin-top:6px"><div class="fi2"><div class="l2">累计</div><div class="v2" id="ft-s">0</div></div><div class="fi2"><div class="l2">成本</div><div class="v2 rd" id="ft-c">0</div></div><div class="fi2"><div class="l2">利润</div><div class="v2 gr" id="ft-p">0</div></div></div></div><div class="cd"><div class="ct">📅 月度汇总</div><div id="mon-ls"></div></div><div class="cd"><div class="ct">👥 客户汇总</div><div id="cust-ls"></div></div><div class="cd" style="text-align:center"><button class="btn btn-p btn-s" onclick="exp('outbound')">导出出库</button><button class="btn btn-p btn-s" onclick="exp('inbound')">导出入库</button><button class="btn btn-p btn-s" onclick="exp('inventory')">导出库存</button></div></div>
+
+<!-- 对账 -->
+<div class="pg" id="reconciliation"><div class="hd">📑 对账管理</div><div class="cd"><div class="ct">📊 应收应付</div><div class="ar2"><div class="ac"><div class="al">应收款</div><div class="av or" id="rc-ar">0</div></div><div class="ac"><div class="al">应付款</div><div class="av or" id="rc-ap">0</div></div><div class="ac"><div class="al">已收款</div><div class="av" id="rc-rc">0</div></div><div class="ac"><div class="al">已付款</div><div class="av" id="rc-py">0</div></div></div></div><div class="tabs"><div class="t sel" onclick="rctab('ar')">应收</div><div class="t" onclick="rctab('ap')">应付</div><div class="t" onclick="rctab('rec')">收款</div><div class="t" onclick="rctab('pay')">付款</div></div><div id="rc-ls" style="padding:0 10px"></div></div>
+
+<!-- 设置 -->
+<div class="pg" id="settings"><div class="hd">⚙️ 系统设置</div><div class="cd"><div class="st-sec"><h4>👤 用户管理</h4><div class="st-row"><input id="su" placeholder="用户名"><select class="fi" id="sr" style="width:auto"><option value="admin">管理员</option><option value="finance">财务</option><option value="operator">登记员</option></select></div><div class="st-row"><input id="sp" placeholder="密码(默认123456)" type="password"><button class="btn-p btn-s" onclick="addUser()">添加</button></div><div id="ul"></div></div><div class="st-sec"><h4>🏢 仓位</h4><div class="st-row"><input id="swh"><button class="btn-p btn-s" onclick="addCfg('warehouses','swh')">添加</button></div><div id="lwh"></div></div><div class="st-sec"><h4>💰 账户</h4><div class="st-row"><input id="sac"><button class="btn-p btn-s" onclick="addCfg('accounts','sac')">添加</button></div><div id="lac"></div></div><div class="st-sec"><h4>👥 客户</h4><div class="st-row"><input id="sct"><button class="btn-p btn-s" onclick="addCfg('customers','sct')">添加</button></div><div id="lct"></div></div><div class="st-sec"><h4>🏭 供应商</h4><div class="st-row"><input id="ssp"><button class="btn-p btn-s" onclick="addCfg('suppliers','ssp')">添加</button></div><div id="lsp"></div></div><div class="st-sec"><h4>📦 物料编码（69码）</h4><div class="st-row"><input id="smc" placeholder="69码/编码"><input id="smn" placeholder="名称"><button class="btn-p btn-s" onclick="addMat()">添加</button></div><div id="lmt"></div></div></div></div>
+
+<div class="bar" id="bar"><div class="tb sel" onclick="go('home')"><span>🏠</span>首页</div><div class="tb" id="b-rec" onclick="go('reconciliation')"><span>📑</span>对账</div><div class="tb" onclick="go('records')"><span>📊</span>流水</div><div class="tb" onclick="go('stock')"><span>📋</span>库存</div><div class="tb" id="tb-set" style="display:none" onclick="go('settings')"><span>⚙️</span>设置</div><div class="tb" onclick="logout()"><span>🚪</span>退出</div></div>
+<div class="toast" id="toast"></div>
+
+<script src="/zxing.min.js"></script>
+<script>
+var T='',R='',U='',C={},rt='out',rct='ar',sd=[],od=[],id=[],td=[],qcart=[],rcData=null,whData=[],invData=null,stkFilter='all',qkDir='out';
+
+function tm(m,t){var x=document.getElementById('toast');x.textContent=m;x.style.display='block';setTimeout(function(){x.style.display='none'},t||1500)}
+async function api(p,m,b){var o={method:m||'GET',headers:{'Content-Type':'application/json'}};if(T)o.headers['Authorization']='Bearer '+T;if(b)o.body=JSON.stringify(b);var r=await fetch(p,o),d=await r.json();if(!r.ok)throw new Error(d.error||'error');return d}
+function go(n){
+  if(n=='finance'&&R!='admin'&&R!='finance')return tm('需要管理员或财务权限');
+  if(n=='reconciliation'&&R!='admin'&&R!='finance')return tm('需要管理员或财务权限');
+  if(n=='settings'&&R!='admin')return tm('需要管理员权限');
+  document.querySelectorAll('.pg').forEach(function(p){p.classList.remove('on')});document.getElementById(n).classList.add('on');
+  var bs=document.querySelectorAll('#bar .tb');bs.forEach(function(b){b.classList.remove('sel')});
+  var idx={home:0,reconciliation:1,records:2,stock:3,settings:4};if(idx[n]!==undefined)bs[idx[n]].classList.add('sel');
+  if(n=='home')ldHome();if(n=='stock')ldStock();if(n=='records')ldRecs();if(n=='finance')ldFin();if(n=='reconciliation')ldRec();if(n=='quick')rstQuick();if(n=='settings')ldSet();
+}
+function setPerms(){var hasFin=R=='admin'||R=='finance';document.getElementById('a-fin').style.display=hasFin?'':'none';document.getElementById('a-rec').style.display=hasFin?'':'none';document.getElementById('b-rec').style.display=hasFin?'':'none';document.getElementById('tb-set').style.display=R=='admin'?'':'none'}
+function nowStr(){var n=new Date();return n.getFullYear()+'-'+('0'+(n.getMonth()+1)).slice(-2)+'-'+('0'+n.getDate()).slice(-2)+'T'+('0'+n.getHours()).slice(-2)+':'+('0'+n.getMinutes()).slice(-2)}
+
+var loginHistory=JSON.parse(localStorage.getItem('loginHistory')||'[]');
+function renderLoginHistory(){
+  var dl=document.getElementById('dl-users');
+  dl.innerHTML=loginHistory.map(function(u){return'<option value="'+u+'">'}).join('');
+}
+async function autoFillPwd(){
+  var u=document.getElementById('lu').value.trim();
+  if(u==='1'){document.getElementById('pwd-grp').style.display='none';document.getElementById('lp').value=''}
+  else{document.getElementById('pwd-grp').style.display=''}
+}
+async function doLogin(){
+  var u=document.getElementById('lu').value.trim(),p=document.getElementById('lp').value.trim();
+  if(!u)return tm('请输入用户名');
+  try{var r=await api('/api/login','POST',{username:u,password:p});T=r.token;R=r.user.role;U=r.user.username;
+    var labels={admin:'管理员',finance:'财务',operator:'登记员'};document.getElementById('hu').textContent=labels[R]+' ('+U+')';
+    if(loginHistory.indexOf(u)<0){loginHistory.unshift(u);if(loginHistory.length>10)loginHistory.pop();localStorage.setItem('loginHistory',JSON.stringify(loginHistory));renderLoginHistory()}
+    document.getElementById('bar').style.display='flex';setPerms();await ldCfg();go('home');
+  }catch(e){tm('登录失败: '+(e.message||'密码错误'))}
+}
+renderLoginHistory();
+function logout(){T='';R='';U='';document.getElementById('bar').style.display='none';document.getElementById('tb-set').style.display='none';document.querySelectorAll('.pg').forEach(function(p){p.classList.remove('on')});document.getElementById('login').classList.add('on')}
+async function ldCfg(){try{C=await api('/api/config');fillDL()}catch(e){}}
+function fillDL(){['ac','wh','sp','ct'].forEach(function(k){var dl=document.getElementById('dl-'+k);if(!dl)return;var key={ac:'accounts',wh:'warehouses',sp:'suppliers',ct:'customers'}[k];dl.innerHTML=(C[key]||[]).map(function(v){return'<option value="'+v+'">'}).join('')})}
+function getMat(c){return(C.materials&&C.materials[c])?C.materials[c]:c}
+
+// ====== 实时视频扫码（带闪光灯） ======
+var scanTarget='',zxReader=null,zxTorch=false,zxTrack=null;
+function scanCode(targetId){
+  scanTarget=targetId;
+  var el=document.createElement('div');el.id='scan-vp';el.className='scan-vp on';
+  el.innerHTML='<div class="scan-close" onclick="stopZxScan()">✕</div><div class="scan-area"><video id="zx-video" autoplay playsinline style="width:100%;height:100%;object-fit:cover"></video><div class="scan-frame"></div></div><div class="scan-hint">将条形码对准框内</div><div class="scan-torch" onclick="toggleTorch()">💡</div>';
+  document.body.appendChild(el);
+  zxReader=new ZXing.BrowserMultiFormatReader();
+  var hints=new Map();hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.CODE_39,ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.QR_CODE]);
+  zxReader.decodeFromVideoDevice({video:{width:{ideal:1920},height:{ideal:1080},facingMode:'environment'}},'zx-video',function(result,err){
+    if(result){
+      var code=result.text;
+      document.getElementById(scanTarget).value=code;
+      document.getElementById(scanTarget).dispatchEvent(new Event('input'));
+      if(scanTarget.indexOf('qs-')===0||scanTarget==='ob-sn'){
+        lookupSn(code);
+      }
+      tm('已识别: '+code);
+      stopZxScan();
+    }
+  });
+  // 设置2倍变焦
+  setTimeout(function(){
+    var v=document.getElementById('zx-video');
+    if(v&&v.srcObject){var tracks=v.srcObject.getVideoTracks();if(tracks.length>0){zxTrack=tracks[0];
+    try{zxTrack.applyConstraints({advanced:[{zoom:2.0}]}).catch(function(){})}catch(e){}}}
+  },1000);
+}
+function toggleTorch(){
+  if(zxTrack&&zxTrack.applyConstraints){
+    zxTorch=!zxTorch;
+    zxTrack.applyConstraints({advanced:[{torch:zxTorch}]}).catch(function(){});
+    document.querySelector('.scan-torch').textContent=zxTorch?'🔆':'💡';
+  }
+}
+function stopZxScan(){
+  if(zxReader){zxReader.reset();zxReader=null}
+  var el=document.getElementById('scan-vp');if(el)el.remove();
+  zxTrack=null;zxTorch=false;
+}
+async function lookupSn(sn){
+  try{
+    var r=await api('/api/sn-lookup/'+encodeURIComponent(sn));
+    if(r.found&&r.code){
+      // 找到对应的产品编码，填入当前出库商品
+      if(scanTarget.indexOf('qs-')===0){
+        var idx=parseInt(scanTarget.replace('qs-',''));
+        qcart[idx].code=r.code;qcart[idx].name=r.name||getMat(r.code);renderQCart();
+      }
+    }
+  }catch(e){}
+}
+
+// 首页
+async function ldHome(){try{var s=await api('/api/stats');document.getElementById('h1').textContent=s.productCount;document.getElementById('h2').textContent=s.alertCount;document.getElementById('h3').textContent=s.inboundCount;document.getElementById('h4').textContent=s.outboundCount;sd=await api('/api/inventory');var al=sd.filter(function(i){return i.alert=='缺货'||i.alert=='库存不足'}),ac=document.getElementById('alert-cd');if(al.length>0){ac.style.display='block';document.getElementById('alert-ls').innerHTML=al.slice(0,5).map(function(i){return'<div class="row" onclick="go(\'stock\')"><div class="l">'+i.name+'<div class="c">'+i.code+'</div></div><b style="font-size:16px;color:'+(i.alert=='缺货'?'#e74c3c':'#ef6c00')+'">'+i.stock+'</b><span class="tag '+(i.alert=='缺货'?'tag-r':'tag-o')+'">'+i.alert+'</span></div>'}).join('')}else ac.style.display='none';od=await api('/api/outbound');document.getElementById('recent-ls').innerHTML=od.length==0?'<div class="empty">暂无</div>':od.slice(-8).reverse().map(function(r){return'<div class="row"><div class="l"><div style="font-size:11px;color:#999">'+r.no+'</div>'+ (r.materialName||r.name)+'</div><div style="text-align:right"><b>×'+r.qty+'</b><div style="font-size:10px;color:#999">'+(r.date||'').slice(0,16)+'</div></div></div>'}).join('')}catch(e){}}
+
+// ====== 快速登记（入库/出库/调货三合一） ======
+function genIN(){return'A'+('0'+(new Date().getMonth()+1)).slice(-2)+('0'+new Date().getDate()).slice(-2)+('0'+new Date().getHours()).slice(-2)+('0'+new Date().getMinutes()).slice(-2)+Math.floor(Math.random()*90+10)}
+function genON(){var n=new Date();return'DP'+('0'+(n.getMonth()+1)).slice(-2)+('0'+n.getDate()).slice(-2)+('0'+n.getHours()).slice(-2)+('0'+n.getMinutes()).slice(-2)+('0'+n.getSeconds()).slice(-2)+Math.floor(Math.random()*900+100)}
+function genTF(){return'TF'+('0'+(new Date().getMonth()+1)).slice(-2)+('0'+new Date().getDate()).slice(-2)+('0'+new Date().getHours()).slice(-2)+('0'+new Date().getMinutes()).slice(-2)+Math.floor(Math.random()*90+10)}
+function qDir(d){qkDir=d;document.querySelectorAll('.dir-switch .ds').forEach(function(x,i){x.classList.toggle('sel',i==['out','in','tf'].indexOf(d))});document.getElementById('qk-in-fields').style.display=d=='in'?'':'none';document.getElementById('qk-out-fields').style.display=d=='out'?'':'none';document.getElementById('qk-tf-fields').style.display=d=='tf'?'':'none';document.getElementById('qk-wh-grp').style.display=d=='tf'?'none':'';document.getElementById('qk-no').value=d=='tf'?genTF():d=='in'?genIN():genON()}
+function rstQuick(){document.getElementById('qk-date').value=nowStr();'qk-sup,qk-ac,qk-ac-out,qk-cust,qk-tf-wh,qk-tf-sup,qk-tf-cust,qk-wh,qk-rm'.split(',').forEach(function(id){document.getElementById(id).value=''});document.getElementById('qk-paid').value='0';qcart=[];renderQCart();qDir(qkDir)}
+function addQCart(){qcart.push({code:'',name:'',qty:1,price:0,sn:'',pprice:0});renderQCart()}
+function rmQCart(i){qcart.splice(i,1);renderQCart()}
+function upQCart(i,f,v){qcart[i][f]=v;if(f=='code')qcart[i].name=getMat(v);renderQCart()}
+function renderQCart(){var h='',t=0,q=0;qcart.forEach(function(it,i){var am=(it.qty||0)*(it.price||0);t+=am;q+=parseFloat(it.qty||0);h+='<div class="cart-item"><span class="cdel" onclick="rmQCart('+i+')">✕</span><div class="fg"><label>编码</label><div class="sr"><input class="fi" value="'+it.code+'" onchange="upQCart('+i+',\'code\',this.value)" id="qc-'+i+'"><button class="scb" onclick="scanCode(\'qc-'+i+'\')">📷</button></div></div><div class="fg"><label>名称</label><input class="fi" value="'+it.name+'" readonly></div><div class="fg"><label>数量</label><input class="fi" type="number" value="'+it.qty+'" onchange="upQCart('+i+',\'qty\',this.value)"></div><div class="fg"><label>单价</label><input class="fi" type="number" value="'+it.price+'" step="0.01" onchange="upQCart('+i+',\'price\',this.value)"></div><div class="fg"><label>SN序列号</label><div class="sr"><input class="fi" value="'+it.sn+'" onchange="upQCart('+i+',\'sn\',this.value)" id="qs-'+i+'"><button class="scb" onclick="scanCode(\'qs-'+i+'\')">📷</button></div></div></div>'});document.getElementById('qcart-ls').innerHTML=h||'<div class="empty">点击「+ 添加」开始</div>';document.getElementById('qcart-sum').textContent='合计: ¥'+t.toFixed(2)+' ('+q+'件)'}
+async function doQuick(){
+  var vc=qcart.filter(function(i){return i.code&&i.qty>0});if(vc.length==0)return tm('请添加商品');
+  if(qkDir=='tf'){
+    var wh=document.getElementById('qk-tf-wh').value.trim();
+    if(!wh)return tm('请选择经手仓位');
+    try{var r=await api('/api/transfer','POST',{no:document.getElementById('qk-no').value,date:document.getElementById('qk-date').value.replace('T',' '),fromWarehouse:wh,toWarehouse:wh,code:vc[0].code,name:vc[0].name,qty:parseFloat(vc[0].qty),remark:document.getElementById('qk-rm').value,supplier:document.getElementById('qk-tf-sup').value.trim(),customer:document.getElementById('qk-tf-cust').value.trim()});tm('调货成功 ✓ '+r.record.no);rstQuick()}catch(e){tm('调货失败: '+(e.message||''))}
+  }else if(qkDir=='in'){
+    try{var r=await api('/api/inbound/batch','POST',{header:{no:document.getElementById('qk-no').value,date:document.getElementById('qk-date').value.replace('T',' '),account:document.getElementById('qk-ac').value.trim(),warehouse:document.getElementById('qk-wh').value.trim(),supplier:document.getElementById('qk-sup').value.trim(),remark:document.getElementById('qk-rm').value},items:vc.map(function(i){return{code:i.code,name:i.name,qty:parseFloat(i.qty),price:parseFloat(i.price),sn1:i.sn}})});tm('入库成功 ✓ '+r.batchNo);rstQuick()}catch(e){tm('入库失败')}
+  }else{
+    var paid=document.getElementById('qk-paid').value=='1';
+    try{var r=await api('/api/outbound/batch','POST',{header:{no:document.getElementById('qk-no').value,date:document.getElementById('qk-date').value.replace('T',' '),customer:document.getElementById('qk-cust').value.trim(),warehouse:document.getElementById('qk-wh').value.trim(),incomeAccount:document.getElementById('qk-ac-out').value.trim(),remark:document.getElementById('qk-rm').value,paid:paid,paidAmount:paid?vc.reduce(function(s,i){return s+(i.qty||0)*(i.price||0)},0):0,paidDate:paid?document.getElementById('qk-date').value.replace('T',' '):''},items:vc.map(function(i){return{code:i.code,materialName:i.name,qty:parseFloat(i.qty),price:parseFloat(i.price),purchasePrice:parseFloat(i.pprice||0),snSerial:i.sn}})});tm('出库成功 ✓ '+r.batchNo);rstQuick()}catch(e){tm('出库失败: '+(e.message||''))}
+  }
+}
+
+// 库存
+function stockFilter(f){stkFilter=f;document.querySelectorAll('#stock .f').forEach(function(x){x.classList.toggle('sel',false)});if(f=='all')document.querySelector('#stock .f').classList.add('sel');else document.querySelector('#stock .f:nth-child('+(f=='warehouse'?2:3)+')').classList.add('sel');ldStock()}
+async function ldStock(){try{if(stkFilter=='warehouse'){whData=await api('/api/inventory/warehouse');renderWhStock()}else if(stkFilter=='invoice'){invData=await api('/api/inventory/invoice');renderInvStock()}else{sd=await api('/api/inventory');renderStock()}}catch(e){if(stkFilter=='invoice')tm('需要管理员或财务权限')}}
+function renderStock(){var kw=(document.getElementById('ss').value||'').toLowerCase(),ls=sd.filter(function(i){return!kw||i.code.toLowerCase().indexOf(kw)>=0||i.name.toLowerCase().indexOf(kw)>=0});ls.sort(function(a,b){var o={'缺货':0,'库存不足':1,'库存过多':2,'正常':3};return(o[a.alert]||3)-(o[b.alert]||3)});var t=0,al=0;sd.forEach(function(i){t+=i.stock;if(i.alert=='缺货'||i.alert=='库存不足')al++});document.getElementById('stock-ls').innerHTML='<div style="display:flex;justify-content:space-around;padding:10px;background:#fff;margin-bottom:10px;border-radius:10px"><div style="text-align:center"><div style="font-size:20px;font-weight:700;color:#1a73e8">'+sd.length+'</div><div style="font-size:10px;color:#999">种类</div></div><div style="text-align:center"><div style="font-size:20px;font-weight:700;color:#1a73e8">'+t+'</div><div style="font-size:10px;color:#999">总库存</div></div><div style="text-align:center"><div style="font-size:20px;font-weight:700;color:#ef6c00">'+al+'</div><div style="font-size:10px;color:#999">预警</div></div></div>'+(ls.length==0?'<div class="empty">暂无</div>':ls.map(function(i){return'<div class="row" style="background:#fff;border-radius:8px;padding:10px;margin-bottom:6px" onclick="showSn(\''+i.code+'\')"><div class="l">'+i.name+'<div class="c">'+i.code+'</div></div><div style="text-align:center;margin:0 8px"><b style="font-size:18px;color:'+(i.alert=='缺货'?'#e74c3c':i.alert=='库存不足'?'#ef6c00':'#333')+'">'+i.stock+'</b><div style="font-size:9px;color:#999">/ '+(i.safety||1)+'</div></div><span class="tag '+(i.alert=='缺货'?'tag-r':i.alert=='库存不足'?'tag-o':i.alert=='库存过多'?'tag-b':'tag-g')+'">'+i.alert+'</span><span style="margin-left:2px">🔍</span></div>'}).join(''))}
+function renderWhStock(){if(!whData||whData.length==0){document.getElementById('stock-ls').innerHTML='<div class="empty">暂无</div>';return}var whs={};whData.forEach(function(i){var wh=i.warehouse||'未指定';if(!whs[wh])whs[wh]=[];whs[wh].push(i)});var h='';Object.keys(whs).sort().forEach(function(wh){var items=whs[wh],total=items.reduce(function(s,i){return s+(i.stock||0)},0);h+='<div class="cd" style="margin:10px 0"><div class="ct">🏢 '+wh+' <span style="font-weight:400;font-size:13px;color:#1a73e8">库存: '+total+'</span></div>'+items.filter(function(i){return i.stock>0}).map(function(i){return'<div class="row"><div class="l">'+i.name+'<div class="c">'+i.code+'</div></div><b style="font-size:16px">'+i.stock+'</b></div>'}).join('')+'</div>'});document.getElementById('stock-ls').innerHTML=h||'<div class="empty">暂无</div>'}
+function renderInvStock(){if(!invData||!invData.items||invData.items.length==0){document.getElementById('stock-ls').innerHTML='<div class="empty">暂无</div>';return}var h='<div style="display:flex;justify-content:space-around;padding:10px;background:#fff;margin-bottom:10px;border-radius:10px"><div style="text-align:center"><div style="font-size:20px;font-weight:700;color:#2e7d32">'+invData.totalInvoiced+'</div><div style="font-size:10px;color:#999">已开票</div></div><div style="text-align:center"><div style="font-size:20px;font-weight:700;color:#ef6c00">'+invData.totalNotInvoiced+'</div><div style="font-size:10px;color:#999">未开票</div></div><div style="text-align:center"><div style="font-size:20px;font-weight:700;color:#1a73e8">'+invData.totalItems+'</div><div style="font-size:10px;color:#999">总计</div></div></div>';h+=invData.items.map(function(i){return'<div class="row" style="background:#fff;border-radius:8px;padding:10px;margin-bottom:6px"><div class="l">'+i.name+'<div class="c">'+i.code+'</div></div><div style="text-align:right"><div><span class="tag tag-g">已开 '+i.invoicedQty+'</span> <span class="tag tag-o">未开 '+i.notInvoicedQty+'</span></div><div style="font-size:10px;color:#999">总计 '+i.totalQty+'</div></div></div>'}).join('');document.getElementById('stock-ls').innerHTML=h}
+async function showSn(code){document.getElementById('sn-modal').classList.add('on');document.getElementById('sn-tt').textContent='SN - '+getMat(code);document.getElementById('sn-ct').innerHTML='<div class="empty">加载中...</div>';try{var sn=await api('/api/sn/'+code),h='<div class="st-sec"><h4>📦 当前库存SN ('+sn.currentStockSns.length+'个)</h4>'+(sn.currentStockSns.length==0?'<div style="color:#999;font-size:12px">暂无</div>':'<table class="sn-table"><tr><th>SN</th><th>入库单号</th><th>日期</th></tr>'+sn.currentStockSns.map(function(s){return'<tr><td style="font-family:monospace;font-size:10px">'+s.sn+'</td><td>'+s.inNo+'</td><td>'+(s.inDate||'').slice(0,16)+'</td></tr>'}).join('')+'</table>')+'</div><div class="st-sec"><h4>📥 入库SN ('+sn.inboundSns.length+'条)</h4>'+sn.inboundSns.map(function(r){return'<div style="font-size:11px;padding:3px 0">'+r.no+' ('+(r.date||'').slice(0,16)+') ×'+r.qty+': '+r.sns.join(', ')+'</div>'}).join('')+'</div><div class="st-sec"><h4>📤 出库SN ('+sn.outboundSns.length+'条)</h4>'+sn.outboundSns.map(function(r){return'<div style="font-size:11px;padding:3px 0">'+r.no+' → '+(r.customer||'')+': '+r.sn+'</div>'}).join('')+'</div>';document.getElementById('sn-ct').innerHTML=h}catch(e){document.getElementById('sn-ct').innerHTML='<div class="empty">加载失败</div>'}}
+function closeSn(){document.getElementById('sn-modal').classList.remove('on')}
+
+// 流水
+async function ldRecs(){try{od=await api('/api/outbound');id=await api('/api/inbound');td=await api('/api/transfer');renderRecs()}catch(e){}}
+function rtab(t){rt=t;document.getElementById('rt-o').classList.toggle('sel',t=='out');document.getElementById('rt-i').classList.toggle('sel',t=='in');document.getElementById('rt-tf').classList.toggle('sel',t=='tf');renderRecs()}
+function renderRecs(){
+  if(rt=='tf'){document.getElementById('rec-ls').innerHTML=(td||[]).length==0?'<div class="empty">暂无调货记录</div>':td.slice().reverse().map(function(r){return'<div style="background:#fff;border-radius:8px;padding:10px;margin-bottom:8px"><div class="row" style="padding:0 0 6px"><div><b>'+r.no+'</b> <span class="tag tag-b">调货</span></div><span style="font-size:10px;color:#999">'+(r.date||'').slice(0,16)+'</span></div><div class="row" style="padding:0"><span>'+(r.name||'')+'</span><b>×'+r.qty+'</b></div><div class="ft">'+r.fromWarehouse+' → '+r.toWarehouse+(r.remark?' | '+r.remark:'')+'</div></div>'}).join('');return}
+  var rs=rt=='out'?od.slice().reverse():id.slice().reverse(),kw=(document.getElementById('rs').value||'').toLowerCase();
+  if(kw)rs=rs.filter(function(r){return(r.no||'').toLowerCase().indexOf(kw)>=0||(r.materialName||r.name||'').toLowerCase().indexOf(kw)>=0||(r.code||'').toLowerCase().indexOf(kw)>=0||(r.snSerial||'').toLowerCase().indexOf(kw)>=0});
+  var isOut=rt=='out',isAdmin=R=='admin',isFin=R=='admin'||R=='finance';
+  document.getElementById('rec-ls').innerHTML=rs.length==0?'<div class="empty">暂无</div>':rs.slice(0,50).map(function(r){
+    var tags='';if(isOut){if(r.invoiced)tags+='<span class="inv-status inv-ok">已开票</span>';else tags+='<span class="inv-status inv-no">未开票</span>';if(r.paid)tags+='<span class="paid-tag paid-yes">已收款</span>';else tags+='<span class="paid-tag paid-no">未收款</span>'}
+    var retInfo='';if(isOut&&r.returnQty>0)retInfo='<div style="font-size:10px;color:#e74c3c">已退: '+r.returnQty+'件</div>';
+    var acts='';if(isAdmin){if(isOut){acts+='<button onclick="showRet(\''+r.no+'\')">退货</button><button onclick="showInv(\''+r.no+'\')">发票</button>'}acts+='<button onclick="showEdit(\''+(isOut?'outbound':'inbound')+'\',\''+r.no+'\')">编辑</button><button class="del" onclick="delRec(\''+(isOut?'outbound':'inbound')+'\',\''+r.no+'\')">删除</button>'}else if(isOut){acts+='<button onclick="showRet(\''+r.no+'\')">退货</button>'}if(isOut&&isFin&&!r.paid)acts+='<button onclick="markPaid(\''+r.no+'\')">标记收款</button>';
+    return'<div style="background:#fff;border-radius:8px;padding:10px;margin-bottom:8px"><div class="row" style="padding:0 0 6px"><div><b style="'+(isOut&&!r.paid?'color:#e74c3c':'')+'">'+r.no+'</b> <span class="tag '+(isOut?'tag-r':'tag-g')+'">'+(isOut?'出库':'入库')+'</span></div><span style="font-size:10px;color:#999">'+(r.date||'').slice(0,16)+'</span></div><div class="row" style="padding:0"><span>'+(r.materialName||r.name)+'</span><b>×'+r.qty+'</b></div>'+retInfo+'<div class="ft">'+(r.snSerial?'SN: '+r.snSerial:'')+(r.customer?' 客户: '+r.customer:'')+(r.warehouse?' 仓位: '+r.warehouse:'')+(r.remark?' 备注: '+r.remark:'')+'</div><div>'+tags+'</div><div class="rec-actions">'+acts+'</div></div>';
+  }).join('');
+}
+function markPaid(no){document.getElementById('ret-modal').classList.add('on');document.getElementById('ret-ct').innerHTML='<div class="fg"><label>收款金额</label><input class="fi" type="number" id="paid-amt" step="0.01"></div><button class="btn btn-p" onclick="doMarkPaid(\''+no+'\')">确认已收款</button><button class="btn btn-o" onclick="closeRet()">取消</button>'}
+async function doMarkPaid(no){var amt=parseFloat(document.getElementById('paid-amt').value)||0;try{await api('/api/outbound/'+no+'/payment','POST',{paid:true,paidAmount:amt,paidDate:nowStr().replace('T',' ')});tm('已标记收款');closeRet();ldRecs()}catch(e){}}
+function showRet(no){document.getElementById('ret-modal').classList.add('on');document.getElementById('ret-ct').innerHTML='<div class="fg"><label>退货数量</label><input class="fi" type="number" id="ret-qty" value="1"></div><div class="fg"><label>退货原因</label><input class="fi" id="ret-reason"></div><button class="btn btn-p" onclick="doRet(\''+no+'\')">确认退货</button><button class="btn btn-o" onclick="closeRet()">取消</button>'}
+function closeRet(){document.getElementById('ret-modal').classList.remove('on')}
+async function doRet(no){var qty=parseFloat(document.getElementById('ret-qty').value),reason=document.getElementById('ret-reason').value;if(!qty||qty<=0)return tm('请输入退货数量');try{await api('/api/outbound/'+no+'/return','POST',{qty:qty,reason:reason});tm('退货成功');closeRet();ldRecs()}catch(e){}}
+function showInv(no){document.getElementById('ret-modal').classList.add('on');document.getElementById('ret-ct').innerHTML='<div class="fg"><label>发票号码</label><input class="fi" id="inv-no"></div><button class="btn btn-p" onclick="doInv(\''+no+'\')">标记已开票</button><button class="btn btn-o" onclick="doInvCancel(\''+no+'\')">取消发票</button><button class="btn btn-o" onclick="closeRet()">关闭</button>'}
+async function doInv(no){try{await api('/api/outbound/'+no+'/invoice','POST',{invoiceNo:document.getElementById('inv-no').value,invoiced:true});tm('已标记开票');closeRet();ldRecs()}catch(e){}}
+async function doInvCancel(no){try{await api('/api/outbound/'+no+'/invoice','POST',{invoiced:false});tm('已取消发票');closeRet();ldRecs()}catch(e){}}
+function showEdit(type,no){var rs=type=='outbound'?od:id,r=rs.find(function(x){return x.no==no});if(!r)return;document.getElementById('edit-modal').classList.add('on');document.getElementById('edit-ct').innerHTML='<div class="fg"><label>日期</label><input class="fi" type="datetime-local" id="ed-date" value="'+(r.date||'').slice(0,16)+'"></div><div class="fg"><label>编码</label><input class="fi" id="ed-code" value="'+(r.code||'')+'"></div><div class="fg"><label>数量</label><input class="fi" type="number" id="ed-qty" value="'+r.qty+'"></div><div class="fg"><label>单价</label><input class="fi" type="number" id="ed-price" value="'+r.price+'" step="0.01"></div><button class="btn btn-p" onclick="doEdit(\''+type+'\',\''+no+'\')">保存</button><button class="btn btn-o" onclick="closeEdit()">取消</button>'}
+function closeEdit(){document.getElementById('edit-modal').classList.remove('on')}
+async function doEdit(type,no){try{await api('/api/'+type+'/'+no,'PUT',{date:document.getElementById('ed-date').value.replace('T',' '),code:document.getElementById('ed-code').value,qty:parseFloat(document.getElementById('ed-qty').value),price:parseFloat(document.getElementById('ed-price').value)});tm('已更新');closeEdit();ldRecs()}catch(e){}}
+async function delRec(type,no){if(!confirm('确定删除 '+no+'？'))return;try{await api('/api/'+type+'/'+no,'DELETE');tm('已删除');ldRecs()}catch(e){}}
+
+// 资金汇总
+async function ldFin(){try{var start=document.getElementById('fs-date').value,end=document.getElementById('fe-date').value,params='';if(start&&end)params='?start='+start+'&end='+end;var f=await api('/api/finance'+params);['d','m','y','t'].forEach(function(p){document.getElementById('f'+p+'-s').textContent='¥'+f.sales[p].amount.toLocaleString();document.getElementById('f'+p+'-c').textContent='¥'+f.sales[p].cost.toLocaleString();document.getElementById('f'+p+'-p').textContent='¥'+f.sales[p].profit.toLocaleString()});document.getElementById('mon-ls').innerHTML=f.monthly.map(function(m){return'<div class="row"><span>'+m.month+'</span><span>'+m.count+'笔</span><span style="color:#1a73e8">¥'+m.sales.toLocaleString()+'</span><b style="color:#2e7d32">¥'+m.profit.toLocaleString()+'</b></div>'}).join('');document.getElementById('cust-ls').innerHTML=f.customers.map(function(c){return'<div class="row"><span class="l">'+c.name+'</span><span>'+c.count+'笔</span><span style="color:#1a73e8">¥'+c.sales.toLocaleString()+'</span><b style="color:#2e7d32">¥'+c.profit.toLocaleString()+'</b></div>'}).join('')}catch(e){tm('需要管理员或财务权限')}}
+function exp(t){window.open('/api/export/'+t,'_blank')}
+
+// 对账
+async function ldRec(){try{rcData=await api('/api/reconciliation');renderRc()}catch(e){tm('需要管理员或财务权限')}}
+function rctab(t){rct=t;document.querySelectorAll('#reconciliation .tabs .t').forEach(function(x,i){x.classList.toggle('sel',['ar','ap','rec','pay'][i]==t)});renderRc()}
+function renderRc(){if(!rcData)return;document.getElementById('rc-ar').textContent='¥'+rcData.summary.totalAR.toLocaleString();document.getElementById('rc-ap').textContent='¥'+rcData.summary.totalAP.toLocaleString();document.getElementById('rc-rc').textContent='¥'+rcData.summary.totalReceipts.toLocaleString();document.getElementById('rc-py').textContent='¥'+rcData.summary.totalPayments.toLocaleString();var h='';if(rct=='ar')h=rcData.accountsReceivable.map(function(a){return'<div class="row"><span class="l">'+a.customer+'</span><span>¥'+a.sales.toLocaleString()+'</span><span style="color:#2e7d32">¥'+a.received.toLocaleString()+'</span><b style="color:'+(a.balance>0?'#e74c3c':'#2e7d32')+'">¥'+a.balance.toLocaleString()+'</b><span class="tag '+(a.balance<=0?'tag-g':a.received>0?'tag-o':'tag-r')+'">'+a.status+'</span></div>'}).join('');else if(rct=='ap')h=rcData.accountsPayable.map(function(a){return'<div class="row"><span class="l">'+a.supplier+'</span><span>¥'+a.purchase.toLocaleString()+'</span><span style="color:#2e7d32">¥'+a.paid.toLocaleString()+'</span><b style="color:'+(a.balance>0?'#e74c3c':'#2e7d32')+'">¥'+a.balance.toLocaleString()+'</b><span class="tag '+(a.balance<=0?'tag-g':a.paid>0?'tag-o':'tag-r')+'">'+a.status+'</span></div>'}).join('');else if(rct=='rec'){h='<div class="fg"><label>客户</label><div class="sr"><input class="fi" id="py-cust" list="dl-ct"></div></div><div class="fg"><label>金额</label><input class="fi" type="number" id="py-amt" step="0.01"></div><div class="fg"><label>日期</label><input class="fi" type="datetime-local" id="py-date"></div><div class="fg"><label>备注</label><input class="fi" id="py-rm"></div><button class="btn btn-p" onclick="doPay(\'receipt\')">确认收款</button>';h+='<div class="st-sec"><h4>收款记录</h4>'+(rcData.receipts.length==0?'<div class="empty">暂无</div>':rcData.receipts.slice().reverse().map(function(r){return'<div class="row"><span>'+r.customer+'</span><span>'+(r.date||'').slice(0,16)+'</span><b style="color:#2e7d32">¥'+Number(r.amount).toFixed(2)+'</b></div>'}).join(''))+'</div>'}else if(rct=='pay'){h='<div class="fg"><label>供应商</label><div class="sr"><input class="fi" id="py-sup" list="dl-sp"></div></div><div class="fg"><label>金额</label><input class="fi" type="number" id="py-amt" step="0.01"></div><div class="fg"><label>日期</label><input class="fi" type="datetime-local" id="py-date"></div><div class="fg"><label>备注</label><input class="fi" id="py-rm"></div><button class="btn btn-p" onclick="doPay(\'payment\')">确认付款</button>';h+='<div class="st-sec"><h4>付款记录</h4>'+(rcData.payments.length==0?'<div class="empty">暂无</div>':rcData.payments.slice().reverse().map(function(r){return'<div class="row"><span>'+r.supplier+'</span><span>'+(r.date||'').slice(0,16)+'</span><b style="color:#e74c3c">¥'+Number(r.amount).toFixed(2)+'</b></div>'}).join(''))+'</div>'}document.getElementById('rc-ls').innerHTML=h||'<div class="empty">暂无</div>';if(rct=='rec'||rct=='pay')document.getElementById('py-date').value=nowStr()}
+async function doPay(type){var cust=document.getElementById('py-cust')?document.getElementById('py-cust').value.trim():'',sup=document.getElementById('py-sup')?document.getElementById('py-sup').value.trim():'',amt=parseFloat(document.getElementById('py-amt').value);if(!amt||amt<=0)return tm('请输入金额');try{await api('/api/payments','POST',{type:type,customer:cust||sup,amount:amt,date:document.getElementById('py-date').value.replace('T',' '),remark:document.getElementById('py-rm').value});tm('登记成功');ldRec()}catch(e){}}
+
+// 设置
+async function ldSet(){if(R!='admin')return;try{C=await api('/api/config')}catch(e){}['wh','ac','ct','sp'].forEach(function(k){var key={wh:'warehouses',ac:'accounts',ct:'customers',sp:'suppliers'}[k];rList(key,k)});rMats();rUsers()}
+function rList(s,k){document.getElementById('l'+k).innerHTML=(C[s]||[]).map(function(v,i){return'<div class="st-item"><span>'+v+'</span><span class="del" onclick="delCfg(\''+s+'\','+i+')">✕</span></div>'}).join('')}
+function rMats(){var m=C.materials||{};document.getElementById('lmt').innerHTML=Object.entries(m).map(function(e){return'<div class="st-item"><span style="font-family:monospace;font-size:10px">'+e[0]+'</span><span>'+e[1]+'</span><span class="del" onclick="delMat(\''+e[0]+'\')">✕</span></div>'}).join('')}
+async function rUsers(){try{var u=await api('/api/users');document.getElementById('ul').innerHTML=u.map(function(x){return'<div class="st-item"><b>'+x.username+'</b> ('+(x.role=='admin'?'管理员':x.role=='finance'?'财务':'登记员')+')'+(x.username!='admin'?'<span class="del" onclick="delUser(\''+x.username+'\')">✕</span>':'')+'</div>'}).join('')}catch(e){}}
+async function addUser(){var u=document.getElementById('su').value.trim(),r=document.getElementById('sr').value,p=document.getElementById('sp').value;if(!u)return tm('请输入用户名');try{await api('/api/users','POST',{username:u,role:r,password:p});document.getElementById('su').value='';document.getElementById('sp').value='';rUsers();tm('已添加')}catch(e){}}
+async function delUser(u){if(!confirm('删除 '+u+'?'))return;try{await api('/api/users/'+u,'DELETE');rUsers();tm('已删除')}catch(e){}}
+async function addCfg(s,id){var v=document.getElementById(id).value.trim();if(!v)return tm('请输入');if(!C[s])C[s]=[];if(C[s].indexOf(v)>=0)return tm('已存在');C[s].push(v);try{await api('/api/config/'+s,'POST',C[s]);document.getElementById(id).value='';rList(s,id.slice(1));fillDL();tm('已添加')}catch(e){}}
+async function delCfg(s,i){C[s].splice(i,1);try{await api('/api/config/'+s,'POST',C[s]);rList(s,{warehouses:'wh',accounts:'ac',customers:'ct',suppliers:'sp'}[s]);fillDL();tm('已删除')}catch(e){}}
+async function addMat(){var c=document.getElementById('smc').value.trim(),n=document.getElementById('smn').value.trim();if(!c||!n)return tm('请填写');if(!C.materials)C.materials={};if(C.materials[c]&&C.materials[c]!==n)return tm('该编码已存在产品信息，不可修改');C.materials[c]=n;try{await api('/api/config/materials','POST',C.materials);document.getElementById('smc').value='';document.getElementById('smn').value='';rMats();tm('已添加')}catch(e){}}
+async function delMat(c){delete C.materials[c];try{await api('/api/config/materials','POST',C.materials);rMats();tm('已删除')}catch(e){}}
+
+document.getElementById('bar').style.display='none';
+document.getElementById('lp').addEventListener('keydown',function(e){if(e.key=='Enter')doLogin()});
+</script></body></html>
