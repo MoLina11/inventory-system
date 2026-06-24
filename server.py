@@ -9,7 +9,9 @@ from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
-app = Flask(__name__, static_folder='/workspace', static_url_path='')
+# 获取当前文件所在目录（兼容本地和云部署）
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app = Flask(__name__, static_folder=BASE_DIR, static_url_path='')
 CORS(app)
 
 # ============ 配置 ============
@@ -55,7 +57,7 @@ def require_admin():
     return require_role('admin')
 
 # ============ 数据存储（内存缓存 + 持久化文件） ============
-DATA_FILE = '/workspace/data.json'
+DATA_FILE = os.path.join(BASE_DIR, 'data.json')
 data_lock = __import__('threading').Lock()
 
 DEFAULT_CONFIG = {
@@ -683,7 +685,12 @@ def api_delete_user(username):
 # ============ 静态文件 ============
 @app.route('/')
 def index():
-    return send_from_directory('/workspace', 'inventory-web.html')
+    return send_from_directory(BASE_DIR, 'inventory-web.html')
+
+# ============ 健康检查（用于 Koyeb keep-alive） ============
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok', 'time': datetime.now().isoformat()})
 
 # ============ API: 退货登记 ============
 @app.route('/api/outbound/<no>/return', methods=['POST'])
