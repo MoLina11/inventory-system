@@ -190,28 +190,45 @@ function scanCode(targetId) {
         '<div class="scan-torch" onclick="toggleScanTorch()">&#128161;</div>';
     document.body.appendChild(el);
     var video = document.getElementById('scan-video');
+    // 使用1280x720提高帧率和清晰度，微信内置浏览器对此分辨率兼容性更好
     navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
     }).then(function(stream) {
         scanStream = stream;
         video.srcObject = stream;
+        video.setAttribute('playsinline', true);
         video.play();
         var tracks = stream.getVideoTracks();
         if (tracks.length > 0) {
             scanTrack = tracks[0];
-            try { scanTrack.applyConstraints({ advanced: [{ zoom: 2.0 }] }).catch(function() {}); } catch(e) {}
+            try { scanTrack.applyConstraints({ advanced: [{ zoom: 1.5 }] }).catch(function() {}); } catch(e) {}
         }
         var canvas = document.createElement('canvas');
         var ctx = canvas.getContext('2d');
+        var frameCount = 0;
         function tick() {
             if (!scanRunning || !scanStream) return;
+            frameCount++;
+            // 每2帧处理一次，减少CPU消耗
+            if (frameCount % 2 !== 0) { requestAnimationFrame(tick); return; }
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                // 只取中间区域（扫描框位置），提高识别率
+                var vw = video.videoWidth, vh = video.videoHeight;
+                var sx = Math.floor(vw * 0.15), sy = Math.floor(vh * 0.15);
+                var sw = Math.floor(vw * 0.7), sh = Math.floor(vh * 0.4);
+                canvas.width = sw;
+                canvas.height = sh;
+                ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+                // 图像锐化增强
+                var imageData = ctx.getImageData(0, 0, sw, sh);
+                var d = imageData.data;
+                for (var i = 0; i < d.length; i += 4) {
+                    var avg = (d[i] + d[i+1] + d[i+2]) / 3;
+                    d[i] = d[i+1] = d[i+2] = avg > 128 ? Math.min(255, avg + 30) : Math.max(0, avg - 30);
+                }
+                ctx.putImageData(imageData, 0, 0);
                 var code = null;
-                try { code = jsQR(imageData.data, canvas.width, canvas.height, { inversionAttempts: 'dontInvert' }); } catch(e) {}
+                try { code = jsQR(imageData.data, sw, sh, { inversionAttempts: 'attemptBoth' }); } catch(e) {}
                 if (code && code.data) {
                     var result = code.data;
                     var input = document.getElementById(scanTarget);
