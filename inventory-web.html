@@ -200,37 +200,52 @@ function scanByPhoto() {
     inp.capture = 'environment';
     inp.onchange = function() {
         if (!inp.files || !inp.files[0]) return;
-        var reader = new FileReader();
-        reader.onload = function(e) {
-            var img = new Image();
-            img.onload = function() {
-                var c = document.createElement('canvas');
-                var ctx = c.getContext('2d');
-                var s = Math.min(1, 1200 / Math.max(img.width, img.height));
-                c.width = Math.floor(img.width * s);
-                c.height = Math.floor(img.height * s);
-                ctx.drawImage(img, 0, 0, c.width, c.height);
+        var img = new Image();
+        img.onload = function() {
+            var c = document.createElement('canvas');
+            var ctx = c.getContext('2d');
+            // 更大尺寸保留细节
+            var max = 1600;
+            var s = Math.min(1, max / Math.max(img.width, img.height));
+            c.width = Math.floor(img.width * s);
+            c.height = Math.floor(img.height * s);
+            ctx.drawImage(img, 0, 0, c.width, c.height);
+            // 多次尝试：原图、反转、灰度
+            var results = [];
+            for (var attempt = 0; attempt < 3; attempt++) {
                 var d = ctx.getImageData(0, 0, c.width, c.height);
-                for (var i = 0; i < d.data.length; i += 4) {
-                    var g = d.data[i] * 0.299 + d.data[i+1] * 0.587 + d.data[i+2] * 0.114;
-                    g = g > 128 ? Math.min(255, g + 60) : Math.max(0, g - 60);
-                    d.data[i] = d.data[i+1] = d.data[i+2] = g;
+                if (attempt === 0) {
+                    // 灰度+强锐化
+                    for (var i = 0; i < d.data.length; i += 4) {
+                        var g = d.data[i] * 0.299 + d.data[i+1] * 0.587 + d.data[i+2] * 0.114;
+                        g = g > 140 ? Math.min(255, g + 50) : Math.max(0, g - 50);
+                        d.data[i] = d.data[i+1] = d.data[i+2] = g;
+                    }
+                } else if (attempt === 1) {
+                    // 反转颜色
+                    for (var i = 0; i < d.data.length; i += 4) {
+                        d.data[i] = 255 - d.data[i];
+                        d.data[i+1] = 255 - d.data[i+1];
+                        d.data[i+2] = 255 - d.data[i+2];
+                    }
                 }
+                // attempt===2 原图不处理
                 ctx.putImageData(d, 0, 0);
                 var code = jsQR(d.data, c.width, c.height, { inversionAttempts: 'attemptBoth' });
-                if (code && code.data) {
-                    handleScanResult(code.data);
-                } else {
-                    // jsQR没识别到，用Quagga再试一次
-                    Quagga.decodeSingle({ src: e.target.result, numOfWorkers: 0, decoder: { readers: ['ean_reader', 'ean_8_reader', 'code_128_reader', 'code_39_reader'] } }, function(r) {
-                        if (r && r.codeResult) handleScanResult(r.codeResult.code);
-                        else tm('未识别到条码，请重新拍照');
-                    });
-                }
-            };
-            img.src = e.target.result;
+                if (code && code.data) { results.push(code.data); break; }
+            }
+            if (results.length > 0) {
+                handleScanResult(results[0]);
+            } else {
+                // jsQR全失败，用Quagga decodeSingle
+                var dataUrl = c.toDataURL('image/jpeg', 0.95);
+                Quagga.decodeSingle({ src: dataUrl, numOfWorkers: 0, inputStream: { size: 1600 }, decoder: { readers: ['ean_reader', 'ean_8_reader', 'code_128_reader', 'code_39_reader', 'upc_reader', 'upc_e_reader'] } }, function(r) {
+                    if (r && r.codeResult) handleScanResult(r.codeResult.code);
+                    else tm('未识别到条码，请重新拍照');
+                });
+            }
         };
-        reader.readAsDataURL(inp.files[0]);
+        img.src = URL.createObjectURL(inp.files[0]);
     };
     inp.click();
 }
