@@ -176,7 +176,7 @@ async function ldCfg(){try{C=await api('/api/config');fillDL()}catch(e){}}
 function fillDL(){['ac','wh','sp','ct'].forEach(function(k){var dl=document.getElementById('dl-'+k);if(!dl)return;var key={ac:'accounts',wh:'warehouses',sp:'suppliers',ct:'customers'}[k];dl.innerHTML=(C[key]||[]).map(function(v){return'<option value="'+v+'">'}).join('')})}
 function getMat(c){return(C.materials&&C.materials[c])?C.materials[c]:c}
 
-// ====== 扫码（html5-qrcode 实时视频流） ======
+// ====== 扫码（html5-qrcode 实时视频流 + 自动变焦） ======
 var scanTarget='',html5Scanner=null;
 function scanCode(targetId) {
     scanTarget = targetId;
@@ -187,10 +187,14 @@ function scanCode(targetId) {
         '<div id="scan-reader" style="width:100%;height:100%"></div>' +
         '<div class="scan-hint">将条码对准框内</div>';
     document.body.appendChild(el);
+    // 根据屏幕宽度动态计算扫描框大小：占屏幕70%宽度
+    var sw = Math.min(window.innerWidth, 480);
+    var bw = Math.floor(sw * 0.7);
+    var bh = Math.floor(bw * 0.45);
     html5Scanner = new Html5Qrcode('scan-reader');
     html5Scanner.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 280, height: 160 }, aspectRatio: 1.5 },
+        { fps: 10, qrbox: { width: bw, height: bh }, aspectRatio: 1.5, disableFlip: false },
         function(code) {
             var inp = document.getElementById(scanTarget);
             if (inp) { inp.value = code; inp.dispatchEvent(new Event('input', { bubbles: true })); }
@@ -200,7 +204,18 @@ function scanCode(targetId) {
             stopScan();
         },
         function() {}
-    ).catch(function(err) { tm('摄像头失败: ' + err); stopScan(); });
+    ).then(function() {
+        // 尝试2倍数字变焦
+        setTimeout(function() {
+            var v = document.querySelector('#scan-reader video');
+            if (v && v.srcObject) {
+                var t = v.srcObject.getVideoTracks()[0];
+                if (t && t.applyConstraints) {
+                    t.applyConstraints({ advanced: [{ zoom: 2.0 }] }).catch(function() {});
+                }
+            }
+        }, 800);
+    }).catch(function(err) { tm('摄像头失败: ' + err); stopScan(); });
 }
 function stopScan() {
     if (html5Scanner) { try { html5Scanner.stop().catch(function(){}); } catch(e) {} html5Scanner = null; }
