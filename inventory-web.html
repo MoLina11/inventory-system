@@ -194,7 +194,7 @@ function scanCode(targetId) {
     html5Scanner = new Html5Qrcode('scan-reader');
     html5Scanner.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: bw, height: bh }, aspectRatio: 1.5, disableFlip: false },
+        { fps: 5, qrbox: { width: bw, height: bh }, aspectRatio: 1.5, disableFlip: false },
         function(code) {
             var inp = document.getElementById(scanTarget);
             if (inp) { inp.value = code; inp.dispatchEvent(new Event('input', { bubbles: true })); }
