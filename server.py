@@ -9,8 +9,22 @@ from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
-app = Flask(__name__, static_folder='/workspace', static_url_path='')
+# 获取当前文件所在目录（兼容本地和云部署）
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app = Flask(__name__, static_folder=BASE_DIR, static_url_path='')
 CORS(app)
+
+# ============ WPS 同步模块 ============
+try:
+    from wps_sync import (
+        push_outbound_batch, push_inbound_batch, push_inventory,
+        pull_all_sheets, full_push, init_wps_sheets, get_wps_status,
+        get_status as get_sync_status, set_enabled, reset_errors,
+    )
+    WPS_SYNC_ENABLED = True
+except ImportError:
+    WPS_SYNC_ENABLED = False
+    print('[WPS] wps_sync.py 未找到，WPS 同步功能已禁用')
 
 # ============ 配置 ============
 KDOCS_TOKEN = os.environ.get('KDOCS_TOKEN', '')
@@ -20,7 +34,7 @@ KDOCS_FILE_ID = os.environ.get('KDOCS_FILE_ID', '')
 USERS = {
     '1': {'password': '', 'role': 'admin', 'name': '管理员'},
     'finance': {'password': '123456', 'role': 'finance', 'name': '财务'},
-    'operator': {'password': '123456', 'role': 'operator', 'name': '登记员'},
+    'operator': {'password': '', 'role': 'operator', 'name': '登记员'},
 }
 
 ROLE_PERMS = {
@@ -55,7 +69,7 @@ def require_admin():
     return require_role('admin')
 
 # ============ 数据存储（内存缓存 + 持久化文件） ============
-DATA_FILE = '/workspace/data.json'
+DATA_FILE = os.path.join(BASE_DIR, 'data.json')
 data_lock = __import__('threading').Lock()
 
 DEFAULT_CONFIG = {
@@ -367,6 +381,24 @@ def api_outbound_batch():
             errors.append(f'{name}: 库存不足(当前{stock_item["stock"]})')
             continue
         
+        # 验证SN序列号（如果填写了SN）
+        if sn:
+            inbound_sns = set()
+            for r in d['inbound']:
+                if r.get('code') == code:
+                    for sf in ['sn1', 'sn2', 'sn3']:
+                        v = r.get(sf, '')
+                        if v: inbound_sns.add(v)
+            outbound_sns = set()
+            for r in d['outbound']:
+                if r.get('snSerial'): outbound_sns.add(r.get('snSerial'))
+            if sn not in inbound_sns:
+                errors.append(f'{name}: SN "{sn}" 不在入库记录中，无法出库')
+                continue
+            if sn in outbound_sns:
+                errors.append(f'{name}: SN "{sn}" 已被出库，不能重复出库')
+                continue
+        
         rec = {
             'no': batch_no,
             'date': date,
@@ -399,6 +431,17 @@ def api_outbound_batch():
         stock_item['stock'] = stock_item['inQty'] - stock_item['outQty']
     
     save_data(d)
+    
+    # WPS 同步（后台异步推送，不阻塞主流程）
+    if WPS_SYNC_ENABLED and records:
+        import threading
+        def sync_wps():
+            try:
+                push_outbound_batch(records)
+            except Exception as e:
+                print(f'[WPS] 出库同步失败: {e}')
+        threading.Thread(target=sync_wps, daemon=True).start()
+    
     return jsonify({
         'success': len(errors) == 0,
         'batchNo': batch_no,
@@ -674,16 +717,37 @@ def api_add_user():
 def api_delete_user(username):
     s = require_admin()
     if not s: return jsonify({'error': '需要管理员权限'}), 403
-    if username == 'admin':
+    if username == 'admin' or username == '1':
         return jsonify({'success': False, 'error': '不能删除管理员'})
     if username in USERS:
         del USERS[username]
     return jsonify({'success': True})
 
+@app.route('/api/users/<username>', methods=['PUT'])
+def api_edit_user(username):
+    s = require_admin()
+    if not s: return jsonify({'error': '需要管理员权限'}), 403
+    if username not in USERS:
+        return jsonify({'success': False, 'error': '用户不存在'})
+    data = request.json
+    role = data.get('role', USERS[username]['role'])
+    if role not in ('admin', 'finance', 'operator'):
+        return jsonify({'success': False, 'error': '无效角色'})
+    USERS[username]['role'] = role
+    USERS[username]['name'] = data.get('name', USERS[username]['name'])
+    if data.get('password'):
+        USERS[username]['password'] = data['password']
+    return jsonify({'success': True})
+
 # ============ 静态文件 ============
 @app.route('/')
 def index():
-    return send_from_directory('/workspace', 'inventory-web.html')
+    return send_from_directory(BASE_DIR, 'inventory-web.html')
+
+# ============ 健康检查（用于 Koyeb keep-alive） ============
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok', 'time': datetime.now().isoformat()})
 
 # ============ API: 退货登记 ============
 @app.route('/api/outbound/<no>/return', methods=['POST'])
@@ -787,6 +851,109 @@ def api_invoice_stats():
         'notInvoiced': not_invoiced,
         'notInvoicedList': not_invoiced_list[:20],
     })
+
+# ============ API: WPS 同步管理 ============
+@app.route('/api/sync/status', methods=['GET'])
+def api_sync_status():
+    """获取 WPS 同步状态"""
+    s = require_auth()
+    if not s: return jsonify({'error': '未登录'}), 401
+    
+    if not WPS_SYNC_ENABLED:
+        return jsonify({'enabled': False, 'message': 'WPS 同步模块未安装'})
+    
+    status = get_sync_status()
+    # 同时获取 WPS 端状态
+    try:
+        wps_status = get_wps_status()
+        status['wps'] = wps_status
+    except Exception as e:
+        status['wps'] = {'error': str(e)}
+    
+    return jsonify(status)
+
+@app.route('/api/sync/push', methods=['POST'])
+def api_sync_push():
+    """手动推送数据到 WPS"""
+    s = require_admin()
+    if not s: return jsonify({'error': '需要管理员权限'}), 403
+    
+    if not WPS_SYNC_ENABLED:
+        return jsonify({'success': False, 'error': 'WPS 同步模块未安装'})
+    
+    data = request.json or {}
+    push_type = data.get('type', 'all')  # all / outbound / inbound / inventory
+    
+    d = load_data()
+    
+    try:
+        if push_type == 'outbound':
+            result = push_outbound_batch(d.get('outbound', []))
+        elif push_type == 'inbound':
+            result = push_inbound_batch(d.get('inbound', []))
+        elif push_type == 'inventory':
+            result = push_inventory(d.get('inventory', []))
+        else:
+            result = full_push(d)
+        
+        return jsonify({'success': True, 'result': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/sync/pull', methods=['POST'])
+def api_sync_pull():
+    """从 WPS 拉取数据"""
+    s = require_admin()
+    if not s: return jsonify({'error': '需要管理员权限'}), 403
+    
+    if not WPS_SYNC_ENABLED:
+        return jsonify({'success': False, 'error': 'WPS 同步模块未安装'})
+    
+    try:
+        result = pull_all_sheets()
+        return jsonify({'success': True, 'result': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/sync/init', methods=['POST'])
+def api_sync_init():
+    """初始化 WPS Sheet 表头"""
+    s = require_admin()
+    if not s: return jsonify({'error': '需要管理员权限'}), 403
+    
+    if not WPS_SYNC_ENABLED:
+        return jsonify({'success': False, 'error': 'WPS 同步模块未安装'})
+    
+    try:
+        result = init_wps_sheets()
+        return jsonify({'success': True, 'result': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/sync/toggle', methods=['POST'])
+def api_sync_toggle():
+    """切换同步开关"""
+    s = require_admin()
+    if not s: return jsonify({'error': '需要管理员权限'}), 403
+    
+    if not WPS_SYNC_ENABLED:
+        return jsonify({'success': False, 'error': 'WPS 同步模块未安装'})
+    
+    data = request.json or {}
+    enabled = data.get('enabled', True)
+    result = set_enabled(enabled)
+    return jsonify(result)
+
+@app.route('/api/sync/reset-errors', methods=['POST'])
+def api_sync_reset_errors():
+    """重置同步错误计数"""
+    s = require_admin()
+    if not s: return jsonify({'error': '需要管理员权限'}), 403
+    
+    if not WPS_SYNC_ENABLED:
+        return jsonify({'success': False, 'error': 'WPS 同步模块未安装'})
+    
+    return jsonify(reset_errors())
 
 # ============ API: 仓位库存 ============
 @app.route('/api/inventory/warehouse', methods=['GET'])
@@ -1040,7 +1207,7 @@ def api_outbound_modify(no):
     for r in d['outbound']:
         if r.get('no') == no:
             for k, v in data.items():
-                if k in r: r[k] = v
+                r[k] = v
     save_data(d)
     return jsonify({'success': True})
 
@@ -1071,7 +1238,7 @@ def api_inbound_modify(no):
     for r in d['inbound']:
         if r.get('no') == no:
             for k, v in data.items():
-                if k in r: r[k] = v
+                r[k] = v
     save_data(d)
     return jsonify({'success': True})
 
@@ -1132,6 +1299,17 @@ def api_inbound_batch():
         stock_item['stock'] = stock_item['inQty'] - stock_item['outQty']
     
     save_data(d)
+    
+    # WPS 同步（后台异步推送）
+    if WPS_SYNC_ENABLED and records:
+        import threading
+        def sync_wps():
+            try:
+                push_inbound_batch(records)
+            except Exception as e:
+                print(f'[WPS] 入库同步失败: {e}')
+        threading.Thread(target=sync_wps, daemon=True).start()
+    
     return jsonify({'success': True, 'batchNo': batch_no, 'records': records, 'totalAmount': round(sum(r['amount'] for r in records), 2)})
 
 # ============ 启动
