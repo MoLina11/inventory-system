@@ -416,23 +416,15 @@ async function ldSyncStatus(){
   try{
     var s=await api('/api/sync/status');
     var h='';
-    if(s.enabled===false&&s.message)h='<span style="color:#e74c3c">⚠ '+s.message+'</span>';
+    h+='<span style="color:#e65100;font-weight:600">📌 WPS 为主数据源</span> ';
+    if(s.enabled===false&&s.message)h+='<span style="color:#e74c3c">⚠ '+s.message+'</span>';
     else{
-      h='<span style="color:'+(s.enabled?'#2e7d32':'#999')+'">'+(s.enabled?'✅ 已启用':'⏸ 已禁用')+'</span>';
-      if(s.last_push)h+=' | 推送: '+s.last_push.slice(0,16).replace('T',' ');
-      if(s.last_pull)h+=' | 拉取: '+s.last_pull.slice(0,16).replace('T',' ');
+      h+='<span style="color:'+(s.enabled?'#2e7d32':'#999')+'">'+(s.enabled?'✅ 同步已启用':'⏸ 同步已禁用')+'</span>';
+      if(s.last_push)h+=' | 上次推送: '+s.last_push.slice(0,16).replace('T',' ');
+      if(s.last_pull)h+=' | 上次拉取: '+s.last_pull.slice(0,16).replace('T',' ');
       if(s.push_errors>0)h+=' | <span style="color:#e74c3c">推送错误: '+s.push_errors+'</span>';
       if(s.pull_errors>0)h+=' | <span style="color:#e74c3c">拉取错误: '+s.pull_errors+'</span>';
       if(s.last_error)h+='<div style="color:#e74c3c;font-size:10px">错误: '+s.last_error+'</div>';
-      // WPS端状态
-      if(s.wps&&s.wps.success&&s.wps.result){
-        var ws=s.wps.result;
-        h+='<div style="margin-top:4px">WPS端: ';
-        if(ws.outbound)h+='出库'+ws.outbound.dataRows+'行 ';
-        if(ws.inbound)h+='入库'+ws.inbound.dataRows+'行 ';
-        if(ws.inventory)h+='库存'+ws.inventory.dataRows+'行';
-        h+='</div>';
-      }
     }
     document.getElementById('sync-status').innerHTML=h;
   }catch(e){}
@@ -442,9 +434,19 @@ async function syncPush(){
   syncLog('正在推送数据到WPS...');
   try{var r=await api('/api/sync/push','POST',{});syncLog('推送完成: '+JSON.stringify(r.result));ldSyncStatus()}catch(e){syncLog('推送失败: '+e.message)}
 }
-async function syncPull(){
-  syncLog('正在从WPS拉取数据...');
-  try{var r=await api('/api/sync/pull','POST');syncLog('拉取完成: '+JSON.stringify(r.result));ldSyncStatus()}catch(e){syncLog('拉取失败: '+e.message)}
+async function syncPullAll(){
+  if(!confirm('⚠ 将从 WPS 云文档同步全部数据并覆盖本地数据，确定继续？'))return;
+  syncLog('正在从 WPS 同步全部数据...');
+  try{
+    var r=await api('/api/sync/pull-all','POST');
+    if(r.success){
+      syncLog('✅ 同步完成！出库'+r.outbound+'条 入库'+r.inbound+'条 库存'+r.inventory+'条。页面即将刷新...');
+      ldSyncStatus();
+      setTimeout(function(){location.reload()},2000);
+    }else{
+      syncLog('❌ 同步失败: '+(r.errors||[]).join(', '));
+    }
+  }catch(e){syncLog('❌ 同步失败: '+e.message)}
 }
 async function syncInit(){
   syncLog('正在初始化WPS Sheet...');

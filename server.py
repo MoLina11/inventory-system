@@ -19,6 +19,7 @@ try:
     from wps_sync import (
         push_outbound_batch, push_inbound_batch, push_inventory,
         pull_all_sheets, full_push, init_wps_sheets, get_wps_status,
+        pull_all_and_replace,
         get_status as get_sync_status, set_enabled, reset_errors,
     )
     WPS_SYNC_ENABLED = True
@@ -955,6 +956,24 @@ def api_sync_reset_errors():
     
     return jsonify(reset_errors())
 
+@app.route('/api/sync/pull-all', methods=['POST'])
+def api_sync_pull_all():
+    """
+    核心：从 WPS 拉取全部数据，替换本地 data.json
+    WPS 是主数据源
+    """
+    s = require_admin()
+    if not s: return jsonify({'error': '需要管理员权限'}), 403
+    
+    if not WPS_SYNC_ENABLED:
+        return jsonify({'success': False, 'error': 'WPS 同步模块未安装'})
+    
+    try:
+        result = pull_all_and_replace()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 # ============ API: 仓位库存 ============
 @app.route('/api/inventory/warehouse', methods=['GET'])
 def api_inventory_warehouse():
@@ -1352,6 +1371,18 @@ if __name__ == '__main__':
         for i in init_data['inventory']:
             i['stock'] = i['inQty'] - i['outQty']
         save_data(init_data)
+    
+    # 如果 data.json 已存在且 WPS 同步可用，启动时自动从 WPS 拉取最新数据
+    if WPS_SYNC_ENABLED and os.path.exists(DATA_FILE):
+        try:
+            print('[WPS] 启动时从 WPS 同步数据...')
+            result = pull_all_and_replace()
+            if result.get('success'):
+                print(f'[WPS] 同步完成: 出库{result.get("outbound",0)} 入库{result.get("inbound",0)} 库存{result.get("inventory",0)}')
+            else:
+                print(f'[WPS] 同步失败: {result.get("errors", [])}')
+        except Exception as e:
+            print(f'[WPS] 启动同步异常: {e}')
     
     port = int(os.environ.get('PORT', 8001))
     print(f'🚀 出入库管理系统后端已启动: http://0.0.0.0:{port}')
