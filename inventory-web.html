@@ -198,7 +198,13 @@ function scanCode(targetId) {
     '<button onclick="stopScan();manualInput()" style="background:rgba(255,255,255,0.9);border:none;padding:8px 20px;border-radius:16px;font-size:13px;cursor:pointer">⌨ 手动输入</button>' +
     '</div>';
   document.body.appendChild(el);
-  // html5-qrcode 优先（微信兼容性更好）
+  // 微信环境直接提示手动输入（getUserMedia 不支持）
+  if (isWechat) {
+    document.getElementById('scan-hint').textContent = '⚠️ 微信内置浏览器不支持摄像头，请手动输入条码号';
+    document.getElementById('scan-torch-btn').style.display = 'none';
+    return;
+  }
+  // 非微信环境：html5-qrcode 优先
   tryHtml5Qr();
 }
 function tryHtml5Qr(){
@@ -229,7 +235,11 @@ function tryQuagga(){
     decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader'] },
     locator: { halfSample:false, patchSize:'small' }, locate:true, frequency:10
   }, function(err) {
-    if (err) { document.getElementById('scan-hint').textContent='摄像头不可用，请手动输入'; document.getElementById('scan-torch-btn').style.display='none'; return; }
+    if (err) { 
+      document.getElementById('scan-hint').textContent='⚠️ 摄像头不可用，请手动输入条码号';
+      document.getElementById('scan-torch-btn').style.display='none';
+      return; 
+    }
     Quagga.start();
     setTimeout(function() {
       var v = document.querySelector('#scan-area video');
