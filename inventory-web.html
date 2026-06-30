@@ -131,11 +131,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f6fa;
 
 <div class="bar" id="bar"><div class="tb sel" onclick="go('home')"><span>🏠</span>首页</div><div class="tb" id="b-rec" onclick="go('reconciliation')"><span>📑</span>对账</div><div class="tb" onclick="go('records')"><span>📊</span>流水</div><div class="tb" onclick="go('stock')"><span>📋</span>库存</div><div class="tb" id="tb-set" style="display:none" onclick="go('settings')"><span>⚙️</span>设置</div><div class="tb" onclick="logout()"><span>🚪</span>退出</div></div>
 <div class="toast" id="toast"></div>
+<div id="wechat-tip" style="display:none;background:#07c160;color:#fff;text-align:center;padding:8px 16px;font-size:12px;position:sticky;top:0;z-index:99;max-width:480px;margin:0 auto">📱 微信中打开 | <span style="text-decoration:underline;cursor:pointer" onclick="openInBrowser()">点此查看如何在浏览器中打开 →</span><span style="float:right;cursor:pointer" onclick="this.parentElement.style.display='none'">✕</span></div>
 
-<!-- 扫码库：Quagga2 专攻一维条码 -->
+<!-- 扫码库：html5-qrcode 优先（微信兼容性好），Quagga2 备选 -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
 <script>
 var T='',R='',U='',C={},rt='out',rct='ar',sd=[],od=[],id=[],td=[],qcart=[],rcData=null,whData=[],invData=null,stkFilter='all',qkDir='out';
+var isWechat=/MicroMessenger/i.test(navigator.userAgent); // 微信环境检测
 
 function tm(m,t){var x=document.getElementById('toast');x.textContent=m;x.style.display='block';setTimeout(function(){x.style.display='none'},t||1500)}
 async function api(p,m,b){var o={method:m||'GET',headers:{'Content-Type':'application/json'}};if(T)o.headers['Authorization']='Bearer '+T;if(b)o.body=JSON.stringify(b);var r=await fetch(p,o),d=await r.json();if(!r.ok)throw new Error(d.error||'error');return d}
@@ -176,81 +179,114 @@ async function ldCfg(){try{C=await api('/api/config');fillDL()}catch(e){}}
 function fillDL(){['ac','wh','sp','ct'].forEach(function(k){var dl=document.getElementById('dl-'+k);if(!dl)return;var key={ac:'accounts',wh:'warehouses',sp:'suppliers',ct:'customers'}[k];dl.innerHTML=(C[key]||[]).map(function(v){return'<option value="'+v+'">'}).join('')})}
 function getMat(c){return(C.materials&&C.materials[c])?C.materials[c]:c}
 
-// ====== 扫码（Quagga2 1080p + 摄像头变焦 + 手电筒） ======
-var scanTarget='',scanRunning=false;
+// ====== 扫码（html5-qrcode 优先 → Quagga2 备选 → 手动输入兜底） ======
+var scanTarget='',scanRunning=false,scanEngine='';
 function scanCode(targetId) {
-    if (scanRunning) return;
-    scanTarget = targetId;
-    scanRunning = true;
-    var el = document.createElement('div');
-    el.id = 'scan-vp';
-    el.className = 'scan-vp on';
-    el.innerHTML = '<div class="scan-close" onclick="stopScan()">&#10005;</div>' +
-        '<div id="scan-area" style="position:absolute;top:0;left:0;width:100%;height:100%"></div>' +
-        '<div class="scan-hint">将条码对准框内</div>' +
-        '<div class="scan-torch" onclick="toggleScanTorch()">&#128161;</div>';
-    document.body.appendChild(el);
-    Quagga.init({
-        inputStream: {
-            name: 'Live', type: 'LiveStream',
-            target: document.getElementById('scan-area'),
-            constraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, zoom: { ideal: 3.0 } }
-        },
-        decoder: { readers: ['ean_reader', 'ean_8_reader', 'code_128_reader', 'code_39_reader', 'upc_reader', 'upc_e_reader'] },
-        locator: { halfSample: false, patchSize: 'small' },
-        locate: true,
-        frequency: 10
-    }, function(err) {
-        if (err) { tm('摄像头失败: ' + err); stopScan(); return; }
-        Quagga.start();
-        // 手动变焦
-        setTimeout(function() {
-            var v = document.querySelector('#scan-area video');
-            if (v && v.srcObject) {
-                var t = v.srcObject.getVideoTracks()[0];
-                if (t) {
-                    t.applyConstraints({ advanced: [{ zoom: 3.0 }] }).catch(function() {});
-                }
-            }
-        }, 1000);
-    });
-    Quagga.onDetected(function(r) {
-        if (r && r.codeResult) {
-            var code = r.codeResult.code;
-            var inp = document.getElementById(scanTarget);
-            if (inp) { inp.value = code; inp.dispatchEvent(new Event('input', { bubbles: true })); }
-            if (scanTarget.indexOf('qs-') === 0) lookupSn(code);
-            if (scanTarget === 'rs') renderRecs();
-            tm('已识别: ' + code);
-            stopScan();
-        }
-    });
+  if (scanRunning) return;
+  scanTarget = targetId;
+  scanRunning = true;
+  // 创建扫码界面
+  var el = document.createElement('div');
+  el.id = 'scan-vp';
+  el.className = 'scan-vp on';
+  el.innerHTML = '<div class="scan-close" onclick="stopScan()">✕</div>' +
+    '<div id="scan-area" style="position:absolute;top:0;left:0;width:100%;height:100%"></div>' +
+    '<div class="scan-frame"></div>' +
+    '<div class="scan-hint" id="scan-hint">将条码对准框内</div>' +
+    '<div class="scan-torch" id="scan-torch-btn" onclick="toggleScanTorch()" style="display:none">💡</div>' +
+    '<div style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);z-index:10">' +
+    '<button onclick="stopScan();manualInput()" style="background:rgba(255,255,255,0.9);border:none;padding:8px 20px;border-radius:16px;font-size:13px;cursor:pointer">⌨ 手动输入</button>' +
+    '</div>';
+  document.body.appendChild(el);
+  // html5-qrcode 优先（微信兼容性更好）
+  tryHtml5Qr();
+}
+function tryHtml5Qr(){
+  scanEngine='html5';
+  document.getElementById('scan-hint').textContent='📷 初始化摄像头...';
+  var h5reader = new Html5Qrcode('scan-area');
+  var config = { fps: 15, qrbox: { width: 260, height: 160 }, formatsToSupport: [ Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E ] };
+  h5reader.start({ facingMode: 'environment' }, config, function(decodedText) {
+    onCodeDetected(decodedText);
+  }, function(err) {}).then(function() {
+    document.getElementById('scan-hint').textContent='将条码对准框内';
+    document.getElementById('scan-torch-btn').style.display='';
+    window._h5reader = h5reader;
+  }).catch(function(err) {
+    // html5-qrcode 失败，降级到 Quagga2
+    document.getElementById('scan-hint').textContent='切换扫码引擎...';
+    try { h5reader.stop().catch(function(){}); } catch(e) {}
+    tryQuagga();
+  });
+}
+function tryQuagga(){
+  scanEngine='quagga';
+  document.getElementById('scan-hint').textContent='将条码对准框内（Quagga）';
+  var el = document.getElementById('scan-area');
+  if (el) el.innerHTML = '';
+  Quagga.init({
+    inputStream: { name:'Live', type:'LiveStream', target: document.getElementById('scan-area'), constraints: { facingMode:'environment', width:{ideal:1280}, height:{ideal:720} } },
+    decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader'] },
+    locator: { halfSample:false, patchSize:'small' }, locate:true, frequency:10
+  }, function(err) {
+    if (err) { document.getElementById('scan-hint').textContent='摄像头不可用，请手动输入'; document.getElementById('scan-torch-btn').style.display='none'; return; }
+    Quagga.start();
+    setTimeout(function() {
+      var v = document.querySelector('#scan-area video');
+      if (v && v.srcObject) { var t = v.srcObject.getVideoTracks()[0]; if (t) { t.applyConstraints({ advanced: [{ zoom: 2.0 }] }).catch(function() {}); } }
+    }, 1000);
+  });
+  Quagga.onDetected(function(r) {
+    if (r && r.codeResult) { onCodeDetected(r.codeResult.code); }
+  });
+}
+function onCodeDetected(code) {
+  var inp = document.getElementById(scanTarget);
+  if (inp) { inp.value = code; inp.dispatchEvent(new Event('input', { bubbles: true })); }
+  if (scanTarget.indexOf('qs-') === 0) lookupSn(code);
+  if (scanTarget === 'rs') renderRecs();
+  tm('已识别: ' + code);
+  stopScan();
+}
+function manualInput(){
+  var code = prompt('请输入条码号：','');
+  if (code && code.trim()) {
+    onCodeDetected(code.trim());
+  }
 }
 var scanTorch = false;
 function toggleScanTorch() {
+  if (scanEngine === 'html5' && window._h5reader) {
+    // html5-qrcode 手电筒
+    scanTorch = !scanTorch;
+    window._h5reader.applyVideoConstraints({ advanced: [{ torch: scanTorch }] }).catch(function() {});
+    document.getElementById('scan-torch-btn').textContent = scanTorch ? '🔦' : '💡';
+  } else {
     var v = document.querySelector('#scan-area video');
     if (v && v.srcObject) {
-        var t = v.srcObject.getVideoTracks()[0];
-        if (t) {
-            scanTorch = !scanTorch;
-            t.applyConstraints({ advanced: [{ torch: scanTorch }] }).catch(function() {});
-            var btn = document.querySelector('.scan-torch');
-            if (btn) btn.textContent = scanTorch ? '🔦' : '💡';
-        }
+      var t = v.srcObject.getVideoTracks()[0];
+      if (t) {
+        scanTorch = !scanTorch;
+        t.applyConstraints({ advanced: [{ torch: scanTorch }] }).catch(function() {});
+        document.getElementById('scan-torch-btn').textContent = scanTorch ? '🔦' : '💡';
+      }
     }
+  }
 }
 function stopScan() {
-    scanRunning = false;
-    try { Quagga.stop(); } catch(e) {}
-    var el = document.getElementById('scan-vp');
-    if (el) el.remove();
-    scanTorch = false;
+  scanRunning = false;
+  try {
+    if (scanEngine === 'html5' && window._h5reader) { window._h5reader.stop().catch(function() {}); }
+    if (scanEngine === 'quagga') { Quagga.stop(); }
+  } catch(e) {}
+  var el = document.getElementById('scan-vp');
+  if (el) el.remove();
+  scanTorch = false; scanEngine = '';
 }
 async function lookupSn(sn){
   try{
     var r=await api('/api/sn-lookup/'+encodeURIComponent(sn));
     if(r.found&&r.code){
-      // 找到对应的产品编码，填入当前出库商品
       if(scanTarget.indexOf('qs-')===0){
         var idx=parseInt(scanTarget.replace('qs-',''));
         qcart[idx].code=r.code;qcart[idx].name=r.name||getMat(r.code);renderQCart();
@@ -458,4 +494,14 @@ async function syncReset(){
 
 document.getElementById('bar').style.display='none';
 document.getElementById('lp').addEventListener('keydown',function(e){if(e.key=='Enter')doLogin()});
+// 微信环境检测
+if(isWechat){document.getElementById('wechat-tip').style.display='block'}
+function openInBrowser(){
+  var ua=navigator.userAgent.toLowerCase();
+  if(ua.indexOf('iphone')>=0||ua.indexOf('ipad')>=0){
+    alert('iOS 微信中打开：\n1. 点击右上角 ··· 按钮\n2. 选择「在 Safari 中打开」\n\n或在手机浏览器中直接访问：\nMartinMo.pythonanywhere.com');
+  }else{
+    alert('Android 微信中打开：\n1. 点击右上角 ··· 按钮\n2. 选择「在浏览器中打开」\n\n或在手机浏览器中直接访问：\nMartinMo.pythonanywhere.com');
+  }
+}
 </script></body></html>
