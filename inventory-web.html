@@ -2,7 +2,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f6fa;color:#333;font-size:14px;max-width:480px;margin:0 auto;min-height:100vh}
-.pg{display:none;padding-bottom:60px}.pg.on{display:block}
+.pg{display:none;padding-bottom:60px}.pg.on{display:block}body{visibility:hidden}body.ready{visibility:visible}
 .hd{background:linear-gradient(135deg,#1a73e8,#1557b0);padding:14px 16px;color:#fff;font-size:17px;font-weight:600}
 .hd .u{font-size:11px;opacity:0.8;float:right}
 .cd{background:#fff;border-radius:10px;padding:14px;margin:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
@@ -538,6 +538,8 @@ document.getElementById('bar').style.display='none';
 document.getElementById('lp').addEventListener('keydown',function(e){if(e.key=='Enter')doLogin()});
 // 微信环境检测
 if(isWechat){document.getElementById('wechat-tip').style.display='block'}
+// 页面就绪后显示，避免闪屏
+document.body.classList.add('ready');
 function openInBrowser(){
   var ua=navigator.userAgent.toLowerCase();
   if(ua.indexOf('iphone')>=0||ua.indexOf('ipad')>=0){
