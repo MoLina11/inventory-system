@@ -37,7 +37,10 @@ def _call(action, sheet, **kwargs):
     result = data.get('data', {}).get('result', '')
     if isinstance(result, str):
         try: result = json.loads(result)
-        except: result = None if result == '[Undefined]' else {'raw': result}
+        except: result = None if result == '[Undefined]' else result
+    # result 是 dict 时直接使用
+    if result is None:
+        return None
     return result
 
 def _update(k, v):
