@@ -1,0 +1,12 @@
+__pycache__
+*.pyc
+.git
+.env
+*.log
+core.*
+*.zip
+screenshot*.png
+test.html
+keepalive.sh
+computer-use-recordings
+inventory-miniapp

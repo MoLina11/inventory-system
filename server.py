@@ -18,7 +18,7 @@ CORS(app)
 try:
     from wps_sync import (
         push_outbound_batch, push_inbound_batch, push_inventory,
-        pull_all_sheets, full_push, init_wps_sheets, get_wps_status,
+        full_push, init_wps_sheets, get_wps_status,
         pull_all_and_replace,
         get_status as get_sync_status, set_enabled, reset_errors,
     )
