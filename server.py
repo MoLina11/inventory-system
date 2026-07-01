@@ -1372,18 +1372,7 @@ if __name__ == '__main__':
             i['stock'] = i['inQty'] - i['outQty']
         save_data(init_data)
     
-    # 如果 data.json 已存在且 WPS 同步可用，启动时自动从 WPS 拉取最新数据
-    if WPS_SYNC_ENABLED and os.path.exists(DATA_FILE):
-        try:
-            print('[WPS] 启动时从 WPS 同步数据...')
-            result = pull_all_and_replace()
-            if result.get('success'):
-                print(f'[WPS] 同步完成: 出库{result.get("outbound",0)} 入库{result.get("inbound",0)} 库存{result.get("inventory",0)}')
-            else:
-                print(f'[WPS] 同步失败: {result.get("errors", [])}')
-        except Exception as e:
-            print(f'[WPS] 启动同步异常: {e}')
-    
+    # WPS 同步在 PythonAnywhere 免费版不可用（网络限制），跳过
     port = int(os.environ.get('PORT', 8001))
     print(f'🚀 出入库管理系统后端已启动: http://0.0.0.0:{port}')
     app.run(host='0.0.0.0', port=port, debug=False)
