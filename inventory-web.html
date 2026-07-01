@@ -178,11 +178,17 @@ async function ldCfg(){try{C=await api('/api/config');fillDL()}catch(e){}}
 function fillDL(){['ac','wh','sp','ct'].forEach(function(k){var dl=document.getElementById('dl-'+k);if(!dl)return;var key={ac:'accounts',wh:'warehouses',sp:'suppliers',ct:'customers'}[k];dl.innerHTML=(C[key]||[]).map(function(v){return'<option value="'+v+'">'}).join('')})}
 function getMat(c){return(C.materials&&C.materials[c])?C.materials[c]:c}
 
-// ====== 扫码（ZXing — 最快最准） ======
+// ====== 扫码（微信 WeixinJSBridge / ZXing 双模式） ======
 var scanTarget='',scanRunning=false,scanStream=null,scanTimer=null;
 function scanCode(targetId) {
   if (scanRunning) return;
   scanTarget = targetId; scanRunning = true;
+  // 微信环境：使用 WeixinJSBridge 原生扫码
+  if (isWechat) {
+    startWechatScan();
+    return;
+  }
+  // 非微信：创建取景框 + ZXing 扫码
   var el = document.createElement('div');
   el.id = 'scan-vp'; el.className = 'scan-vp on';
   el.innerHTML = '<div class="scan-close" onclick="stopScan()">\u2715</div>' +
@@ -193,11 +199,55 @@ function scanCode(targetId) {
     '<button onclick="stopScan();manualInput()" style="background:rgba(255,255,255,0.9);border:none;padding:8px 20px;border-radius:16px;font-size:13px;cursor:pointer">\u2328 \u624b\u52a8\u8f93\u5165</button>' +
     '</div>';
   document.body.appendChild(el);
-  if (isWechat) {
-    document.getElementById('scan-hint').textContent = '\u26a0\ufe0f \u5fae\u4fe1\u4e2d\u4e0d\u652f\u6301\u6444\u50cf\u5934\uff0c\u8bf7\u624b\u52a8\u8f93\u5165';
+  startZxing();
+}
+function startWechatScan() {
+  // WeixinJSBridge 是微信内置浏览器自带对象，无需加载外部 JS
+  if (typeof WeixinJSBridge === 'undefined') {
+    // 等待 WeixinJSBridge 就绪
+    document.addEventListener('WeixinJSBridgeReady', function() {
+      doWechatScan();
+    }, false);
+    // 超时降级：2秒后还没就绪就走手动输入
+    setTimeout(function() {
+      if (scanRunning && typeof WeixinJSBridge === 'undefined') {
+        scanRunning = false;
+        showWechatFallback();
+      }
+    }, 2000);
     return;
   }
-  startZxing();
+  doWechatScan();
+}
+function doWechatScan() {
+  try {
+    WeixinJSBridge.invoke('scanQRCode', {
+      needResult: 1,
+      scanType: ['qrCode', 'barCode'],
+      desc: '\u626b\u63cf\u6761\u7801/\u4e8c\u7ef4\u7801'
+    }, function(res) {
+      // 微信扫码结果格式：res.result_str 是扫描结果
+      // err_msg === 'scanQRCode:ok' 表示成功
+      var code = '';
+      if (res && res.err_msg && res.err_msg.indexOf('ok') >= 0) {
+        code = res.result_str || '';
+      }
+      if (code) {
+        onCodeDetected(code);
+      } else {
+        // 用户取消或扫码失败
+        scanRunning = false;
+      }
+    });
+  } catch(e) {
+    showWechatFallback();
+  }
+}
+function showWechatFallback() {
+  // WeixinJSBridge 不可用时的降级方案
+  scanRunning = false;
+  var code = prompt('\u5fae\u4fe1\u626b\u7801\u4e0d\u53ef\u7528\uff0c\u8bf7\u624b\u52a8\u8f93\u5165\u6761\u7801\u53f7\uff1a', '');
+  if (code && code.trim()) { onCodeDetected(code.trim()); }
 }
 function startZxing() {
   var hint = document.getElementById('scan-hint');
