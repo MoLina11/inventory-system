@@ -1,20 +1,16 @@
 """
-WPS 智能表格数据同步模块
-通过 AirScript 1.0 数据表 API 实现 Web 系统与智能表格的双向同步
-
-智能表格使用数据表模型（Record/Field），API 不同于普通在线表格的工作表模型。
+WPS 智能表格数据同步模块 — 工作表 API
+通过 AirScript 1.0 的 Cells API 实现 Web 系统与智能表格的双向同步
 """
 import json, os, logging, threading, urllib.request, urllib.error
 from datetime import datetime
 
-# ============ 配置 ============
 AIRSCRIPT_WEBHOOK = 'https://www.kdocs.cn/api/v3/ide/file/cuCCqjRY0r2N/script/V2-5OP8Jlz20PGcPPpCDuVW9j/sync_task'
 AIRSCRIPT_TOKEN = '4ixlDYFLLEks11xViYVoOf'
 
-# 智能表格数据表名称（用户需在智能表格中创建这些数据表）
-TABLE_OUTBOUND = '出库记录'
-TABLE_INBOUND = '入库记录'
-TABLE_INVENTORY = '库存汇总'
+SHEET_OUTBOUND = '出库记录'
+SHEET_INBOUND = '入库记录'
+SHEET_INVENTORY = '库存汇总'
 
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data.json')
 logger = logging.getLogger('wps_sync')
@@ -25,17 +21,14 @@ _sync_status = {
 }
 _status_lock = threading.Lock()
 
-# ============ 底层 API 调用 ============
-def _call_airscript(action, sheet, fields=None, filter_val=None, record_id=None, timeout=120):
+def _call(action, sheet, **kwargs):
     argv = {'action': action, 'sheet': sheet}
-    if fields: argv['fields'] = fields
-    if filter_val: argv['filter'] = filter_val
-    if record_id: argv['id'] = record_id
+    argv.update(kwargs)
     payload = json.dumps({'Context': {'argv': argv}}).encode('utf-8')
     hdrs = {'Content-Type': 'application/json', 'AirScript-Token': AIRSCRIPT_TOKEN}
     req = urllib.request.Request(AIRSCRIPT_WEBHOOK, payload, hdrs)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read().decode('utf-8'))
     except Exception as e:
         raise Exception(f'API 调用失败: {e}')
@@ -44,7 +37,7 @@ def _call_airscript(action, sheet, fields=None, filter_val=None, record_id=None,
     result = data.get('data', {}).get('result', '')
     if isinstance(result, str):
         try: result = json.loads(result)
-        except: result = {'raw': result} if result != '[Undefined]' else None
+        except: result = None if result == '[Undefined]' else {'raw': result}
     return result
 
 def _update(k, v):
@@ -56,27 +49,28 @@ def _err(push=True):
         else: _sync_status['pull_errors'] += 1
 
 # ============ 推送（系统 → 智能表格）============
+def _get_next_row(sheet_name):
+    """获取下一个空行"""
+    r = _call('readRows', sheet_name, startRow=1, endRow=5000, cols=1)
+    if r and r.get('success'):
+        return len(r.get('data', [])) + 1
+    return 2
+
 def push_outbound_record(record):
-    """推送单条出库记录"""
     if not _sync_status['enabled']: return {'success': False}
     try:
-        fields = {
-            '出库单号': record.get('no', ''),
-            '出库日期': record.get('date', ''),
-            '物料编码': record.get('code', ''),
-            '物料名称': record.get('materialName', ''),
-            '数量': record.get('qty', 0),
-            '售价': record.get('price', 0),
-            '金额': record.get('amount', 0),
-            '操作员': record.get('operator', ''),
-            '收入账户': record.get('incomeAccount', ''),
-            '仓位': record.get('warehouse', ''),
-            '客户': record.get('customer', ''),
-            'SN序列号': record.get('snSerial', ''),
-            '进货单价': record.get('purchasePrice', 0),
-            '备注': record.get('remark', ''),
-        }
-        _call_airscript('create', TABLE_OUTBOUND, fields=fields, timeout=30)
+        row = _get_next_row(SHEET_OUTBOUND)
+        data = [
+            str(row - 1), record.get('no', ''), record.get('date', ''),
+            record.get('code', ''), record.get('materialName', ''),
+            str(record.get('qty', 0)), str(record.get('price', 0)),
+            str(record.get('amount', 0)), record.get('operator', ''),
+            record.get('incomeAccount', ''), record.get('warehouse', ''),
+            record.get('customer', ''), record.get('snSerial', ''),
+            record.get('returnNo', ''), record.get('invoiceStatus', ''),
+            str(record.get('purchasePrice', 0)), record.get('remark', '')
+        ]
+        _call('write', SHEET_OUTBOUND, row=row, data=data)
         _update('last_push', datetime.now().isoformat())
         return {'success': True}
     except Exception as e:
@@ -84,27 +78,19 @@ def push_outbound_record(record):
         return {'success': False, 'message': str(e)}
 
 def push_inbound_record(record):
-    """推送单条入库记录"""
     if not _sync_status['enabled']: return {'success': False}
     try:
-        fields = {
-            '入库单号': record.get('no', ''),
-            '入库日期': record.get('date', ''),
-            '物料编码': record.get('code', ''),
-            '物料名称': record.get('name', ''),
-            '数量': record.get('qty', 0),
-            '单价': record.get('price', 0),
-            '金额': record.get('amount', 0),
-            '操作员': record.get('operator', ''),
-            '采购账户': record.get('account', ''),
-            '仓位': record.get('warehouse', ''),
-            '供应商': record.get('supplier', ''),
-            'SN1': record.get('sn1', ''),
-            'SN2': record.get('sn2', ''),
-            'SN3': record.get('sn3', ''),
-            '备注': record.get('remark', ''),
-        }
-        _call_airscript('create', TABLE_INBOUND, fields=fields, timeout=30)
+        row = _get_next_row(SHEET_INBOUND)
+        data = [
+            str(row - 1), record.get('no', ''), record.get('date', ''),
+            record.get('code', ''), record.get('name', ''),
+            str(record.get('qty', 0)), str(record.get('price', 0)),
+            str(record.get('amount', 0)), record.get('operator', ''),
+            record.get('account', ''), record.get('warehouse', ''),
+            record.get('supplier', ''), record.get('sn1', ''),
+            record.get('sn2', ''), record.get('sn3', ''), record.get('remark', '')
+        ]
+        _call('write', SHEET_INBOUND, row=row, data=data)
         _update('last_push', datetime.now().isoformat())
         return {'success': True}
     except Exception as e:
@@ -132,95 +118,59 @@ def push_inbound_batch(records):
     return {'success': fail == 0, 'count': ok, 'failed': fail}
 
 def push_inventory(inventory_data):
-    """全量推送库存"""
     if not _sync_status['enabled']: return {'success': False}
     try:
-        # 先清空
-        _call_airscript('deleteAll', TABLE_INVENTORY, timeout=120)
-        # 逐条创建
-        ok = 0
-        for item in inventory_data:
-            fields = {
-                '物料编码': item.get('code', ''),
-                '物料名称': item.get('name', ''),
-                '入库总量': item.get('inQty', 0),
-                '入库金额': item.get('inAmt', 0),
-                '出库总量': item.get('outQty', 0),
-                '出库金额': item.get('outAmt', 0),
-                '当前库存': item.get('stock', 0),
-                '安全库存': item.get('safety', 1),
-                '库存状态': item.get('alert', '正常'),
-            }
-            try:
-                _call_airscript('create', TABLE_INVENTORY, fields=fields, timeout=30)
-                ok += 1
-            except: pass
+        _call('clear', SHEET_INVENTORY)
+        _call('writeHeader', SHEET_INVENTORY, headers=['物料编码','物料名称','入库数量','入库金额','出库数量','出库金额','当前库存','安全库存','状态','备注'])
+        for i, item in enumerate(inventory_data):
+            _call('write', SHEET_INVENTORY, row=i+2, data=[
+                item.get('code',''), item.get('name',''),
+                str(item.get('inQty',0)), str(item.get('inAmt',0)),
+                str(item.get('outQty',0)), str(item.get('outAmt',0)),
+                str(item.get('stock',0)), str(item.get('safety',1)),
+                item.get('alert','正常'), ''
+            ])
         _update('last_push', datetime.now().isoformat())
-        return {'success': True, 'count': ok}
+        return {'success': True, 'count': len(inventory_data)}
     except Exception as e:
         _err(True); _update('last_error', str(e))
         return {'success': False, 'message': str(e)}
 
-# ============ 拉取（智能表格 → 系统）============
+# ============ 拉取 ============
 def pull_sheet(sheet_name):
     try:
-        result = _call_airscript('readAll', sheet_name, timeout=120)
+        r = _call('readRows', sheet_name, startRow=1, endRow=5000, cols=20)
         _update('last_pull', datetime.now().isoformat())
-        if not result or not result.get('success'):
-            return {'success': True, 'rows': [], 'count': 0}
-        records = result.get('data', [])
-        return {'success': True, 'rows': records, 'count': len(records)}
+        if r and r.get('success'):
+            return {'success': True, 'rows': r.get('data', []), 'count': len(r.get('data', []))}
+        return {'success': True, 'rows': [], 'count': 0}
     except Exception as e:
         _err(False); _update('last_error', str(e))
         return {'success': False, 'message': str(e)}
 
 def pull_all_and_replace():
-    """从智能表格拉取全部数据，替换 data.json"""
     results = {'outbound': 0, 'inbound': 0, 'inventory': 0, 'success': False, 'errors': []}
-    
-    ob = pull_sheet(TABLE_OUTBOUND)
-    if ob['success']:
-        results['outbound'] = ob['count']
-    else:
-        results['errors'].append(f'出库: {ob.get("message")}')
-    
-    ib = pull_sheet(TABLE_INBOUND)
-    if ib['success']:
-        results['inbound'] = ib['count']
-    else:
-        results['errors'].append(f'入库: {ib.get("message")}')
-    
-    inv = pull_sheet(TABLE_INVENTORY)
-    if inv['success']:
-        results['inventory'] = inv['count']
-    else:
-        results['errors'].append(f'库存: {inv.get("message")}')
-    
-    # 保留现有 config
+    for name, sheet in [('outbound', SHEET_OUTBOUND), ('inbound', SHEET_INBOUND), ('inventory', SHEET_INVENTORY)]:
+        r = pull_sheet(sheet)
+        if r['success']: results[name] = r['count']
+        else: results['errors'].append(f'{name}: {r.get("message")}')
     existing = {}
     if os.path.exists(DATA_FILE):
         try:
-            with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                existing = json.load(f)
+            with open(DATA_FILE, 'r', encoding='utf-8') as f: existing = json.load(f)
         except: pass
-    
     new_data = {
-        'inbound': [],
-        'outbound': [],
-        'inventory': [],
+        'inbound': [], 'outbound': [], 'inventory': [],
         'config': existing.get('config', {}),
         'payments': existing.get('payments', []),
         'receipts': existing.get('receipts', []),
         'transfers': existing.get('transfers', []),
     }
-    
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(new_data, f, ensure_ascii=False, indent=2)
-    
     results['success'] = len(results['errors']) == 0
     return results
 
-# ============ 状态 ============
 def get_status():
     with _status_lock: return dict(_sync_status)
 
@@ -243,15 +193,23 @@ def full_push(data):
     return results
 
 def init_wps_sheets():
-    return {'success': True, 'message': '智能表格无需初始化，请手动创建数据表'}
+    headers_out = ['序号','出库单号','日期','物料编码','物料名称','数量','售价','金额','操作员','收入账户','仓位','客户','SN序列号','退货单号','发票状态','进货单价','备注']
+    headers_in = ['序号','入库单号','日期','物料编码','物料名称','数量','单价','金额','操作员','采购账户','仓位','供应商','SN1','SN2','SN3','备注']
+    headers_inv = ['物料编码','物料名称','入库数量','入库金额','出库数量','出库金额','当前库存','安全库存','状态','备注']
+    try:
+        _call('writeHeader', SHEET_OUTBOUND, headers=headers_out)
+        _call('writeHeader', SHEET_INBOUND, headers=headers_in)
+        _call('writeHeader', SHEET_INVENTORY, headers=headers_inv)
+        return {'success': True}
+    except Exception as e:
+        return {'success': False, 'message': str(e)}
 
 def get_wps_status():
-    """获取智能表格各数据表记录数"""
     result = {}
-    for name, table in [('outbound', TABLE_OUTBOUND), ('inbound', TABLE_INBOUND), ('inventory', TABLE_INVENTORY)]:
+    for name, sheet in [('outbound', SHEET_OUTBOUND), ('inbound', SHEET_INBOUND), ('inventory', SHEET_INVENTORY)]:
         try:
-            r = _call_airscript('count', table, timeout=60)
-            result[name] = r.get('data', {}).get('count', 0) if r else 0
+            r = _call('readRows', sheet, startRow=1, endRow=5000, cols=1)
+            result[name] = len(r.get('data', [])) if r and r.get('success') else -1
         except:
             result[name] = -1
     return {'success': True, 'result': result}
