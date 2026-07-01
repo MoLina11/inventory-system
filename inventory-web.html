@@ -133,9 +133,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f6fa;
 <div class="toast" id="toast"></div>
 <div id="wechat-tip" style="display:none;background:#07c160;color:#fff;text-align:center;padding:8px 16px;font-size:12px;position:sticky;top:0;z-index:99;max-width:480px;margin:0 auto">📱 微信中打开 | <span style="text-decoration:underline;cursor:pointer" onclick="openInBrowser()">点此查看如何在浏览器中打开 →</span><span style="float:right;cursor:pointer" onclick="this.parentElement.style.display='none'">✕</span></div>
 
-<!-- 扫码库：html5-qrcode 优先（微信兼容性好），Quagga2 备选 -->
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
+<!-- 扫码库：ZXing（最快的浏览器端条码库） -->
+<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
 <script>
 var T='',R='',U='',C={},rt='out',rct='ar',sd=[],od=[],id=[],td=[],qcart=[],rcData=null,whData=[],invData=null,stkFilter='all',qkDir='out';
 var isWechat=/MicroMessenger/i.test(navigator.userAgent); // 微信环境检测
@@ -179,119 +178,102 @@ async function ldCfg(){try{C=await api('/api/config');fillDL()}catch(e){}}
 function fillDL(){['ac','wh','sp','ct'].forEach(function(k){var dl=document.getElementById('dl-'+k);if(!dl)return;var key={ac:'accounts',wh:'warehouses',sp:'suppliers',ct:'customers'}[k];dl.innerHTML=(C[key]||[]).map(function(v){return'<option value="'+v+'">'}).join('')})}
 function getMat(c){return(C.materials&&C.materials[c])?C.materials[c]:c}
 
-// ====== 扫码（html5-qrcode 优先 → Quagga2 备选 → 手动输入兜底） ======
-var scanTarget='',scanRunning=false,scanEngine='';
+// ====== 扫码（ZXing — 最快最准） ======
+var scanTarget='',scanRunning=false,scanStream=null,scanTimer=null;
 function scanCode(targetId) {
   if (scanRunning) return;
-  scanTarget = targetId;
-  scanRunning = true;
-  // 创建扫码界面
+  scanTarget = targetId; scanRunning = true;
   var el = document.createElement('div');
-  el.id = 'scan-vp';
-  el.className = 'scan-vp on';
-  el.innerHTML = '<div class="scan-close" onclick="stopScan()">✕</div>' +
+  el.id = 'scan-vp'; el.className = 'scan-vp on';
+  el.innerHTML = '<div class="scan-close" onclick="stopScan()">\u2715</div>' +
     '<div id="scan-area" style="position:absolute;top:0;left:0;width:100%;height:100%"></div>' +
     '<div class="scan-frame"></div>' +
-    '<div class="scan-hint" id="scan-hint">将条码对准框内</div>' +
-    '<div class="scan-torch" id="scan-torch-btn" onclick="toggleScanTorch()" style="display:none">💡</div>' +
+    '<div class="scan-hint" id="scan-hint">\u5c06\u6761\u7801\u5bf9\u51c6\u6846\u5185</div>' +
     '<div style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);z-index:10">' +
-    '<button onclick="stopScan();manualInput()" style="background:rgba(255,255,255,0.9);border:none;padding:8px 20px;border-radius:16px;font-size:13px;cursor:pointer">⌨ 手动输入</button>' +
+    '<button onclick="stopScan();manualInput()" style="background:rgba(255,255,255,0.9);border:none;padding:8px 20px;border-radius:16px;font-size:13px;cursor:pointer">\u2328 \u624b\u52a8\u8f93\u5165</button>' +
     '</div>';
   document.body.appendChild(el);
-  // 微信环境直接提示手动输入（getUserMedia 不支持）
   if (isWechat) {
-    document.getElementById('scan-hint').textContent = '⚠️ 微信内置浏览器不支持摄像头，请手动输入条码号';
-    document.getElementById('scan-torch-btn').style.display = 'none';
+    document.getElementById('scan-hint').textContent = '\u26a0\ufe0f \u5fae\u4fe1\u4e2d\u4e0d\u652f\u6301\u6444\u50cf\u5934\uff0c\u8bf7\u624b\u52a8\u8f93\u5165';
     return;
   }
-  // 非微信环境：html5-qrcode 优先
-  tryHtml5Qr();
+  startZxing();
 }
-function tryHtml5Qr(){
-  scanEngine='html5';
-  document.getElementById('scan-hint').textContent='📷 初始化摄像头...';
-  var h5reader = new Html5Qrcode('scan-area');
-  var config = { fps: 15, qrbox: { width: 260, height: 160 }, formatsToSupport: [ Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E ] };
-  h5reader.start({ facingMode: 'environment' }, config, function(decodedText) {
-    onCodeDetected(decodedText);
-  }, function(err) {}).then(function() {
-    document.getElementById('scan-hint').textContent='将条码对准框内';
-    document.getElementById('scan-torch-btn').style.display='';
-    window._h5reader = h5reader;
-  }).catch(function(err) {
-    // html5-qrcode 失败，降级到 Quagga2
-    document.getElementById('scan-hint').textContent='切换扫码引擎...';
-    try { h5reader.stop().catch(function(){}); } catch(e) {}
-    tryQuagga();
+function startZxing() {
+  var hint = document.getElementById('scan-hint');
+  hint.textContent = '\ud83d\udcf7 \u542f\u52a8\u6444\u50cf\u5934...';
+  var video = document.createElement('video');
+  video.setAttribute('playsinline', 'true');
+  video.setAttribute('autoplay', 'true');
+  video.style.width = '100%'; video.style.height = '100%'; video.style.objectFit = 'cover';
+  document.getElementById('scan-area').appendChild(video);
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+    audio: false
+  }).then(function(stream) {
+    scanStream = stream;
+    video.srcObject = stream;
+    video.onloadedmetadata = function() { video.play(); };
+    hint.textContent = '\u5c06\u6761\u7801\u5bf9\u51c6\u6846\u5185';
+    scanLoop(video);
+  }).catch(function(e) {
+    hint.textContent = '\u26a0\ufe0f \u6444\u50cf\u5934\u4e0d\u53ef\u7528\uff0c\u8bf7\u624b\u52a8\u8f93\u5165';
   });
 }
-function tryQuagga(){
-  scanEngine='quagga';
-  document.getElementById('scan-hint').textContent='将条码对准框内（Quagga）';
-  var el = document.getElementById('scan-area');
-  if (el) el.innerHTML = '';
-  Quagga.init({
-    inputStream: { name:'Live', type:'LiveStream', target: document.getElementById('scan-area'), constraints: { facingMode:'environment', width:{ideal:1280}, height:{ideal:720} } },
-    decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader'] },
-    locator: { halfSample:false, patchSize:'small' }, locate:true, frequency:10
-  }, function(err) {
-    if (err) { 
-      document.getElementById('scan-hint').textContent='⚠️ 摄像头不可用，请手动输入条码号';
-      document.getElementById('scan-torch-btn').style.display='none';
-      return; 
+function scanLoop(video) {
+  if (!scanRunning) return;
+  if (video.readyState < 2 || video.paused) {
+    scanTimer = setTimeout(function() { scanLoop(video); }, 100);
+    return;
+  }
+  var w = video.videoWidth, h = video.videoHeight;
+  if (!w || !h) {
+    scanTimer = setTimeout(function() { scanLoop(video); }, 100);
+    return;
+  }
+  var canvas = document.createElement('canvas');
+  var ratio = 640 / w;
+  canvas.width = 640;
+  canvas.height = Math.floor(h * ratio);
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  try {
+    var ls = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
+    var bb = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(ls));
+    var hints = new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+      ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E
+    ]);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    var reader = new ZXing.MultiFormatReader();
+    reader.setHints(hints);
+    var result = reader.decode(bb);
+    if (result && result.getText()) {
+      onCodeDetected(result.getText());
+      return;
     }
-    Quagga.start();
-    setTimeout(function() {
-      var v = document.querySelector('#scan-area video');
-      if (v && v.srcObject) { var t = v.srcObject.getVideoTracks()[0]; if (t) { t.applyConstraints({ advanced: [{ zoom: 2.0 }] }).catch(function() {}); } }
-    }, 1000);
-  });
-  Quagga.onDetected(function(r) {
-    if (r && r.codeResult) { onCodeDetected(r.codeResult.code); }
-  });
+  } catch(e) {}
+  scanTimer = setTimeout(function() { scanLoop(video); }, 60);
 }
 function onCodeDetected(code) {
   var inp = document.getElementById(scanTarget);
   if (inp) { inp.value = code; inp.dispatchEvent(new Event('input', { bubbles: true })); }
   if (scanTarget.indexOf('qs-') === 0) lookupSn(code);
   if (scanTarget === 'rs') renderRecs();
-  tm('已识别: ' + code);
+  tm('\u5df2\u8bc6\u522b: ' + code);
   stopScan();
 }
-function manualInput(){
-  var code = prompt('请输入条码号：','');
-  if (code && code.trim()) {
-    onCodeDetected(code.trim());
-  }
-}
-var scanTorch = false;
-function toggleScanTorch() {
-  if (scanEngine === 'html5' && window._h5reader) {
-    // html5-qrcode 手电筒
-    scanTorch = !scanTorch;
-    window._h5reader.applyVideoConstraints({ advanced: [{ torch: scanTorch }] }).catch(function() {});
-    document.getElementById('scan-torch-btn').textContent = scanTorch ? '🔦' : '💡';
-  } else {
-    var v = document.querySelector('#scan-area video');
-    if (v && v.srcObject) {
-      var t = v.srcObject.getVideoTracks()[0];
-      if (t) {
-        scanTorch = !scanTorch;
-        t.applyConstraints({ advanced: [{ torch: scanTorch }] }).catch(function() {});
-        document.getElementById('scan-torch-btn').textContent = scanTorch ? '🔦' : '💡';
-      }
-    }
-  }
+function manualInput() {
+  var code = prompt('\u8bf7\u8f93\u5165\u6761\u7801\u53f7\uff1a', '');
+  if (code && code.trim()) { onCodeDetected(code.trim()); }
 }
 function stopScan() {
   scanRunning = false;
-  try {
-    if (scanEngine === 'html5' && window._h5reader) { window._h5reader.stop().catch(function() {}); }
-    if (scanEngine === 'quagga') { Quagga.stop(); }
-  } catch(e) {}
-  var el = document.getElementById('scan-vp');
-  if (el) el.remove();
-  scanTorch = false; scanEngine = '';
+  clearTimeout(scanTimer);
+  if (scanStream) { scanStream.getTracks().forEach(function(t) { t.stop(); }); scanStream = null; }
+  var el = document.getElementById('scan-vp'); if (el) el.remove();
 }
 async function lookupSn(sn){
   try{
