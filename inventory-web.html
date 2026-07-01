@@ -133,8 +133,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f6fa;
 <div class="toast" id="toast"></div>
 <div id="wechat-tip" style="display:none;background:#07c160;color:#fff;text-align:center;padding:8px 16px;font-size:12px;position:sticky;top:0;z-index:99;max-width:480px;margin:0 auto">📱 微信中打开 | <span style="text-decoration:underline;cursor:pointer" onclick="openInBrowser()">点此查看如何在浏览器中打开 →</span><span style="float:right;cursor:pointer" onclick="this.parentElement.style.display='none'">✕</span></div>
 
-<!-- 扫码库：ZXing（最快的浏览器端条码库） -->
-<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+<!-- 扫码库：ZXing（本地部署，避免 PythonAnywhere CDN 白名单限制） -->
+<script src="/zxing.min.js"></script>
 <script>
 var T='',R='',U='',C={},rt='out',rct='ar',sd=[],od=[],id=[],td=[],qcart=[],rcData=null,whData=[],invData=null,stkFilter='all',qkDir='out';
 var isWechat=/MicroMessenger/i.test(navigator.userAgent); // 微信环境检测
