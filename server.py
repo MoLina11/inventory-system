@@ -1333,44 +1333,18 @@ def api_inbound_batch():
 
 # ============ 启动
 if __name__ == '__main__':
-    # 初始化数据文件
+    # 初始化数据文件（空数据，仅保留配置）
     if not os.path.exists(DATA_FILE):
         init_data = {
-            'inbound': [
-                {'no':'A0001','date':'2026-04-19','code':'6973555480730','name':'大我B6C黑色','qty':3,'price':950,'amount':2850,'account':'广东北斗','warehouse':'广州百脑汇仓','supplier':'深圳大我','sn1':'B6CLR0B2FMIB006000345','sn2':'B6CLR0B2FNOA006000226','sn3':'B6CLR0B2FMNA006000271','operator':'admin','time':datetime.now().isoformat()},
-                {'no':'A0001','date':'2026-04-19','code':'6973555480884','name':'大我B7pro-C蓝色','qty':3,'price':1960,'amount':5880,'account':'广东北斗','warehouse':'广州百脑汇仓','supplier':'深圳大我','sn1':'B7CPR0L2GD1A007000227','sn2':'B7CPR0L2GD1A007000224','sn3':'B7CPR0L2GD1A007000328','operator':'admin','time':datetime.now().isoformat()},
-                {'no':'A0001','date':'2026-04-19','code':'6973555480693','name':'大我B13','qty':1,'price':3500,'amount':3500,'account':'广东北斗','warehouse':'深圳大我仓','supplier':'深圳大我','sn1':'B13CA0W2FMIA002000006','operator':'admin','time':datetime.now().isoformat()},
-                {'no':'A0001','date':'2026-04-19','code':'6973555480792','name':'B651C大我HiBreak pro-C白色','qty':2,'price':2400,'amount':4800,'account':'广东北斗','warehouse':'广州百脑汇仓','supplier':'深圳大我','sn1':'B651CNW2FNLD006000336','sn2':'B651CNW2FN9E006000711','operator':'admin','time':datetime.now().isoformat()},
-            ],
-            'outbound': [
-                {'no':'DP0419123307456','date':'2026-04-19','code':'6973555480730','materialName':'大我B6C黑色','qty':1,'price':1017,'amount':1017,'purchasePrice':950,'incomeAccount':'广州彩次元','warehouse':'广州百脑汇仓','customer':'PDD彩次元','snSerial':'B6CLR0B2FMNA006000271','operator':'admin','time':datetime.now().isoformat()},
-                {'no':'DP0420091528347','date':'2026-04-20','code':'6973555480792','materialName':'B651C大我HiBreak pro-C白色','qty':1,'price':2829,'amount':2829,'purchasePrice':2400,'incomeAccount':'广州彩次元','warehouse':'广州百脑汇仓','customer':'PDD彩次元','snSerial':'B651CNW2FN9E006000711','operator':'admin','time':datetime.now().isoformat()},
-                {'no':'DP0421153045128','date':'2026-04-21','code':'6973555480884','materialName':'大我B7pro-C蓝色','qty':1,'price':2199,'amount':2199,'purchasePrice':1960,'incomeAccount':'广州彩次元','warehouse':'广州百脑汇仓','customer':'PDD彩次元','snSerial':'B7CPR0L2GD1A007000436','operator':'operator','time':datetime.now().isoformat()},
-            ],
+            'inbound': [],
+            'outbound': [],
             'inventory': [],
             'payments': [],
             'receipts': [],
+            'config': DEFAULT_CONFIG,
         }
-        # 初始化库存
-        for r in init_data['inbound']:
-            code, name, qty, price = r['code'], r['name'], r['qty'], r['price']
-            item = next((i for i in init_data['inventory'] if i['code'] == code), None)
-            if not item:
-                item = {'code': code, 'name': name, 'inQty': 0, 'inAmt': 0, 'outQty': 0, 'outAmt': 0, 'stock': 0}
-                init_data['inventory'].append(item)
-            item['inQty'] += qty
-            item['inAmt'] += qty * price
-        for r in init_data['outbound']:
-            code, name, qty, price = r['code'], r.get('materialName', r.get('name', '')), r['qty'], r['price']
-            item = next((i for i in init_data['inventory'] if i['code'] == code), None)
-            if not item:
-                item = {'code': code, 'name': name, 'inQty': 0, 'inAmt': 0, 'outQty': 0, 'outAmt': 0, 'stock': 0}
-                init_data['inventory'].append(item)
-            item['outQty'] += qty
-            item['outAmt'] += qty * price
-        for i in init_data['inventory']:
-            i['stock'] = i['inQty'] - i['outQty']
         save_data(init_data)
+        print('[启动] 已创建空白 data.json')
     
     # WPS 同步在 PythonAnywhere 免费版不可用（网络限制），跳过
     port = int(os.environ.get('PORT', 8001))
