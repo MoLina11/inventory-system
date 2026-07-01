@@ -1,18 +1,22 @@
 """
-WPS 金山文档数据同步模块 — WPS 为主数据源
-通过 AirScript API 实现 PythonAnywhere 后端与 WPS 共享文档的实时双向同步
+WPS 智能表格数据同步模块 — WPS 为主数据源
+通过 AirScript 2.0 API 实现 PythonAnywhere 后端与 WPS 智能表格的实时双向同步
 
-架构：WPS 云文档 ↔ AirScript API ↔ server.py ↔ data.json ↔ 前端
+架构：WPS 智能表格 ↔ AirScript 2.0 API ↔ server.py ↔ data.json ↔ 前端
+
+注意：智能表格 AirScript 单次超时 5 秒，需小批量同步（每批 10-20 条）
 """
 import json, os, time, logging, threading, urllib.request, urllib.error
 from datetime import datetime
 
 # ============ 配置 ============
-AIRSCRIPT_WEBHOOK = 'https://www.kdocs.cn/api/v3/ide/file/ckY4M9Uert2l/script/V2-1GSWNkNbTUwdUQ6yCEfZf6/sync_task'
+# TODO: 用户创建智能表格后更新 webhook
+AIRSCRIPT_WEBHOOK = 'https://www.kdocs.cn/api/v3/ide/file/PLACEHOLDER/script/PLACEHOLDER/sync_task'
 AIRSCRIPT_TOKEN = '4ixlDYFLLEks11xViYVoOf'
 SHEET_OUTBOUND = '销售出库明细表'
 SHEET_INBOUND = '进货入库明细表'
 SHEET_INVENTORY = '库存统计表'
+BATCH_SIZE = 20  # 智能表格 5 秒超时，每批 20 条
 
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data.json')
 logger = logging.getLogger('wps_sync')
@@ -98,8 +102,8 @@ def push_outbound_batch(records):
                 str(r.get('amount',0)), r.get('operator',''), r.get('incomeAccount',''),
                 r.get('warehouse',''), r.get('customer',''), r.get('snSerial',''),
                 r.get('returnNo',''), r.get('invoiceStatus',''), str(r.get('purchasePrice',0)), r.get('remark','')])
-        for i in range(0, len(rows), 50):
-            _call_airscript('append', sheet=SHEET_OUTBOUND, rows=rows[i:i+50], timeout=180)
+        for i in range(0, len(rows), BATCH_SIZE):
+            _call_airscript('append', sheet=SHEET_OUTBOUND, rows=rows[i:i+BATCH_SIZE], timeout=30)
         _update_status('last_push', datetime.now().isoformat())
         return {'success': True, 'count': len(rows)}
     except Exception as e:
@@ -116,8 +120,8 @@ def push_inbound_batch(records):
                 str(r.get('amount',0)), r.get('operator',''), r.get('account',''),
                 r.get('warehouse',''), r.get('supplier',''),
                 r.get('sn1',''), r.get('sn2',''), r.get('sn3',''), r.get('remark','')])
-        for i in range(0, len(rows), 50):
-            _call_airscript('append', sheet=SHEET_INBOUND, rows=rows[i:i+50], timeout=180)
+        for i in range(0, len(rows), BATCH_SIZE):
+            _call_airscript('append', sheet=SHEET_INBOUND, rows=rows[i:i+BATCH_SIZE], timeout=30)
         _update_status('last_push', datetime.now().isoformat())
         return {'success': True, 'count': len(rows)}
     except Exception as e:
