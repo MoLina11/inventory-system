@@ -26,6 +26,14 @@ def _call(action, sheet, **kwargs):
     argv.update(kwargs)
     payload = json.dumps({'Context': {'argv': argv}}).encode('utf-8')
     hdrs = {'Content-Type': 'application/json', 'AirScript-Token': AIRSCRIPT_TOKEN}
+    
+    # PythonAnywhere 免费版需要代理
+    proxy_url = os.environ.get('https_proxy') or os.environ.get('HTTP_PROXY') or ''
+    if proxy_url:
+        proxy = urllib.request.ProxyHandler({'https': proxy_url, 'http': proxy_url})
+        opener = urllib.request.build_opener(proxy)
+        urllib.request.install_opener(opener)
+    
     req = urllib.request.Request(AIRSCRIPT_WEBHOOK, payload, hdrs)
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
